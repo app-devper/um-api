@@ -11,7 +11,6 @@ func ApplyUserAPI(
 	app *gin.RouterGroup,
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
-	systemEntity repository.ISystem,
 ) {
 
 	route := app.Group("/user")
@@ -34,10 +33,5 @@ func ApplyUserAPI(
 	route.POST("/set-password",
 		middlewares.RequireAuthenticated(sessionEntity),
 		usecase.SetPassword(userEntity),
-	)
-
-	route.GET("/system",
-		middlewares.RequireAuthenticated(sessionEntity),
-		usecase.GetSystem(systemEntity),
 	)
 }

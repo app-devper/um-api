@@ -11,6 +11,7 @@ func ApplyAuthAPI(
 	app *gin.RouterGroup,
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
+	systemEntity repository.ISystem,
 ) {
 
 	route := app.Group("auth")
@@ -22,6 +23,11 @@ func ApplyAuthAPI(
 	route.GET("/keep-alive",
 		middlewares.RequireAuthenticated(sessionEntity),
 		usecase.KeepAlive(userEntity, sessionEntity),
+	)
+
+	route.GET("/system",
+		middlewares.RequireAuthenticated(sessionEntity),
+		usecase.GetSystem(systemEntity),
 	)
 
 	route.POST("/verify-password",
