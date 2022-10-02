@@ -5,7 +5,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"time"
-	"um/app/core/constant"
 	"um/app/core/utils"
 	"um/app/domain/repository"
 	"um/app/featues/request"
@@ -28,23 +27,23 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 		}
 
 		var expireDate = time.Now().Add(config.AccessTokenTime)
-		data := request.Session{
-			UserId:     user.Id,
-			Type:       constant.AccessToken,
-			Objective:  constant.AccessApi,
-			System:     req.System,
-			ClientId:   user.ClientId,
-			ExpireDate: expireDate,
-		}
-		session, err := sessionEntity.CreateSession(data)
+
+		sessionId, err := sessionEntity.CreateSession(user.Id.Hex())
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		token := middlewares.GenerateJwtToken(session.Id.Hex(), user.Role, session.System, expireDate)
+
+		param := &middlewares.TokenParam{
+			SessionId:      sessionId,
+			Role:           user.Role,
+			System:         req.System,
+			ClientId:       user.ClientId,
+			ExpirationTime: expireDate,
+		}
+		token := middlewares.GenerateJwtToken(param)
 		result := gin.H{
 			"accessToken": token,
-			"clientId":    session.ClientId,
 		}
 		ctx.JSON(http.StatusOK, result)
 	}
@@ -52,29 +51,33 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 
 func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		sessionId := ctx.GetString("SessionId")
 		userId := ctx.GetString("UserId")
-		userRefId := ctx.GetString("UserRefId")
+
 		user, err := userEntity.GetUserById(userId)
-		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		session, err := sessionEntity.GetSessionById(userRefId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
 		var expireDate = time.Now().Add(config.AccessTokenTime)
-		session, err = sessionEntity.UpdateSessionExpireById(userRefId, expireDate)
+		err = sessionEntity.UpdateSessionExpireById(sessionId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		token := middlewares.GenerateJwtToken(session.Id.Hex(), user.Role, session.System, expireDate)
+
+		system := ctx.GetString("System")
+		param := &middlewares.TokenParam{
+			SessionId:      sessionId,
+			Role:           user.Role,
+			System:         system,
+			ClientId:       user.ClientId,
+			ExpirationTime: expireDate,
+		}
+		token := middlewares.GenerateJwtToken(param)
 		result := gin.H{
 			"accessToken": token,
-			"clientId":    session.ClientId,
 		}
 		ctx.JSON(http.StatusOK, result)
 	}
@@ -82,8 +85,8 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 
 func Logout(sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userRefId := ctx.GetString("UserRefId")
-		_, _ = sessionEntity.RemoveSessionById(userRefId)
+		sessionId := ctx.GetString("SessionId")
+		_ = sessionEntity.RemoveSessionById(sessionId)
 		result := gin.H{
 			"message": "success",
 		}

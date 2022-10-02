@@ -1,7 +1,6 @@
 package middlewares
 
 import (
-	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -9,25 +8,33 @@ import (
 	"os"
 	"strings"
 	"time"
-	"um/app/core/constant"
 	"um/app/domain/repository"
 )
 
 type AccessClaims struct {
-	UserRefId string `json:"userRefId"`
-	Role      string `json:"role"`
-	System    string `json:"system"`
+	Role     string `json:"role"`
+	System   string `json:"system"`
+	ClientId string `json:"clientId"`
 	jwt.StandardClaims
 }
 
-func GenerateJwtToken(userRefId string, role string, system string, expirationTime time.Time) string {
+type TokenParam struct {
+	SessionId      string
+	Role           string
+	System         string
+	ClientId       string
+	ExpirationTime time.Time
+}
+
+func GenerateJwtToken(param *TokenParam) string {
 	var jwtKey = []byte(os.Getenv("SECRET_KEY"))
 	claims := &AccessClaims{
-		UserRefId: userRefId,
-		Role:      role,
-		System:    system,
+		Role:     param.Role,
+		System:   param.System,
+		ClientId: param.ClientId,
 		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: expirationTime.Unix(),
+			Id:        param.SessionId,
+			ExpiresAt: param.ExpirationTime.Unix(),
 			Audience:  "domain",
 			Issuer:    "uit",
 		},
@@ -40,19 +47,17 @@ func GenerateJwtToken(userRefId string, role string, system string, expirationTi
 	return tokenString
 }
 
-func RequireAuthenticated(sessionEntity repository.ISession) gin.HandlerFunc {
+func RequireAuthenticated() gin.HandlerFunc {
 	jwtKey := []byte(os.Getenv("SECRET_KEY"))
 	return func(ctx *gin.Context) {
 		token := ctx.GetHeader("Authorization")
 		if token == "" {
-			err := errors.New("missing authorization header")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
 			return
 		}
 		jwtToken := strings.Split(token, "Bearer ")
 		if len(jwtToken) < 2 {
-			err := errors.New("missing authorization header")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
 			return
 		}
 		claims := &AccessClaims{}
@@ -63,39 +68,34 @@ func RequireAuthenticated(sessionEntity repository.ISession) gin.HandlerFunc {
 			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
-		if tkn == nil || !tkn.Valid || claims.UserRefId == "" {
-			err := errors.New("token invalid authorization header")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
-		session, err := sessionEntity.GetSessionById(claims.UserRefId)
-		if session == nil {
-			err := errors.New("user ref invalid")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
-		if session.Objective != constant.AccessApi {
-			err := errors.New("objective invalid")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
-		if session.System != claims.System {
-			err := errors.New("system invalid")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		if tkn == nil || !tkn.Valid || claims.Id == "" {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token invalid"})
 			return
 		}
 
-		ctx.Set("UserRefId", claims.UserRefId)
+		ctx.Set("SessionId", claims.Id)
 		ctx.Set("Role", claims.Role)
 		ctx.Set("System", claims.System)
-		ctx.Set("UserId", session.UserId.Hex())
-		ctx.Set("ClientId", session.ClientId)
+		ctx.Set("ClientId", claims.ClientId)
 
-		logrus.Info("UserRefId: " + claims.UserRefId)
+		logrus.Info("SessionId: " + claims.Id)
 		logrus.Info("Role: " + claims.Role)
 		logrus.Info("System: " + claims.System)
-		logrus.Info("UserId: " + session.UserId.Hex())
-		logrus.Info("ClientId: " + session.ClientId)
+		logrus.Info("ClientId: " + claims.ClientId)
+		return
+	}
+}
+
+func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		sessionId := ctx.GetString("SessionId")
+		userId, err := sessionEntity.GetSessionById(sessionId)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session invalid"})
+			return
+		}
+		ctx.Set("UserId", userId)
+		logrus.Info("UserId: " + userId)
 		return
 	}
 }

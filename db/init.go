@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -13,6 +14,7 @@ import (
 
 type Resource struct {
 	UmDb *mongo.Database
+	RdDB *redis.Client
 }
 
 // Close use this method to close database connection
@@ -37,5 +39,18 @@ func InitResource() (*Resource, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Resource{UmDb: mongoClient.Database(umDbName)}, nil
+	redisHost := os.Getenv("REDIS_HOST")
+	redisOp, err := redis.ParseURL(redisHost)
+	if err != nil {
+		return nil, err
+	}
+	rdb := redis.NewClient(redisOp)
+	_, err = rdb.Ping(context.Background()).Result()
+	if err != nil {
+		return nil, err
+	}
+	return &Resource{
+		UmDb: mongoClient.Database(umDbName),
+		RdDB: rdb,
+	}, nil
 }

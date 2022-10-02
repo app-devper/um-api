@@ -42,22 +42,6 @@ func RequireAuthorization(auths ...string) gin.HandlerFunc {
 	}
 }
 
-func RequireClient() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		param := ctx.Param("clientId")
-		clientId := ctx.GetString("ClientId")
-		if len(param) != 3 {
-			invalidRequest(ctx)
-			return
-		}
-		if param != clientId {
-			notPermission(ctx)
-			return
-		}
-		ctx.Next()
-	}
-}
-
 func invalidRequest(ctx *gin.Context) {
 	ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Invalid request, restricted endpoint"})
 }

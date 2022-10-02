@@ -17,43 +17,50 @@ func ApplySuperUserAPI(
 	route := app.Group("super/user")
 
 	route.GET("",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.GetUsers(userEntity),
 	)
 
 	route.POST("",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.AddAdmin(userEntity),
 	)
 
 	route.GET("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.GetUserById(userEntity),
 	)
 
 	route.DELETE("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.DeleteUserById(userEntity),
 	)
 
 	route.PUT("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.UpdateUserById(userEntity),
 	)
 
 	route.PATCH("/:id/status",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.UpdateStatusById(userEntity),
 	)
 
 	route.PATCH("/:id/role",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.UpdateRoleById(userEntity),
 	)

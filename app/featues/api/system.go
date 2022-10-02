@@ -17,31 +17,36 @@ func ApplySystemAPI(
 	route := app.Group("system")
 
 	route.GET("",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.GetSystems(systemEntity),
 	)
 
 	route.POST("",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.AddSystem(systemEntity),
 	)
 
 	route.GET("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.GetSystemById(systemEntity),
 	)
 
 	route.DELETE("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.DeleteSystemById(systemEntity),
 	)
 
 	route.PUT("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.UpdateSystemById(systemEntity),
 	)

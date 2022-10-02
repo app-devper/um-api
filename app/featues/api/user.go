@@ -16,22 +16,26 @@ func ApplyUserAPI(
 	route := app.Group("/user")
 
 	route.GET("/info",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		usecase.GetUserInfo(userEntity),
 	)
 
 	route.PUT("/info",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		usecase.UpdateUserInfo(userEntity),
 	)
 
 	route.PUT("/change-password",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		usecase.ChangePassword(userEntity),
 	)
 
 	route.POST("/set-password",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		usecase.SetPassword(userEntity),
 	)
 }

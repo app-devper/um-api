@@ -14,54 +14,54 @@ func ApplyAdminUserAPI(
 	sessionEntity repository.ISession,
 ) {
 
-	route := app.Group("admin/:clientId/user")
+	route := app.Group("admin/user")
 
 	route.GET("",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.GetUsersByClientId(userEntity),
 	)
 
 	route.POST("",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.AddUser(userEntity),
 	)
 
 	route.GET("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.GetUserById(userEntity),
 	)
 
 	route.DELETE("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.DeleteUserById(userEntity),
 	)
 
 	route.PUT("/:id",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.UpdateUserById(userEntity),
 	)
 
 	route.PATCH("/:id/status",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.UpdateStatusById(userEntity),
 	)
 
 	route.PATCH("/:id/role",
-		middlewares.RequireAuthenticated(sessionEntity),
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
-		middlewares.RequireClient(),
 		usecase.UpdateRoleById(userEntity),
 	)
 }
