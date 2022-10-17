@@ -1,13 +1,12 @@
 package middlewares
 
 import (
-	"github.com/ekyoung/gin-nice-recovery"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
 func NewRecovery() gin.HandlerFunc {
-	return nice.Recovery(recoveryHandler)
+	return gin.CustomRecovery(recoveryHandler)
 }
 
 func recoveryHandler(ctx *gin.Context, err interface{}) {
