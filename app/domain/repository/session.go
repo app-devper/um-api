@@ -5,7 +5,7 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"um/config"
+	"time"
 	"um/db"
 )
 
@@ -14,8 +14,8 @@ type sessionEntity struct {
 }
 
 type ISession interface {
-	CreateSession(userId string) (string, error)
-	UpdateSessionExpireById(sessionId string) error
+	CreateSession(userId string, expiration time.Duration) (string, error)
+	UpdateSessionExpireById(sessionId string, expiration time.Duration) error
 	RemoveSessionById(sessionId string) error
 	GetSessionById(sessionId string) (string, error)
 }
@@ -25,20 +25,20 @@ func NewSessionEntity(resource *db.Resource) ISession {
 	return entity
 }
 
-func (entity *sessionEntity) CreateSession(userId string) (string, error) {
+func (entity *sessionEntity) CreateSession(userId string, expiration time.Duration) (string, error) {
 	logrus.Info("CreateSession")
 	id := uuid.New()
 	sessionId := id.String()
-	err := entity.rdb.Set(context.Background(), sessionId, userId, config.AccessTokenTime).Err()
+	err := entity.rdb.Set(context.Background(), sessionId, userId, expiration).Err()
 	if err != nil {
 		return "", err
 	}
 	return sessionId, nil
 }
 
-func (entity *sessionEntity) UpdateSessionExpireById(sessionId string) error {
+func (entity *sessionEntity) UpdateSessionExpireById(sessionId string, expiration time.Duration) error {
 	logrus.Info("UpdateSessionExpireById")
-	err := entity.rdb.Expire(context.Background(), sessionId, config.AccessTokenTime).Err()
+	err := entity.rdb.Expire(context.Background(), sessionId, expiration).Err()
 	if err != nil {
 		return err
 	}

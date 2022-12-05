@@ -28,7 +28,7 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 
 		var expireDate = time.Now().Add(config.AccessTokenTime)
 
-		sessionId, err := sessionEntity.CreateSession(user.Id.Hex())
+		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -61,7 +61,7 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 		}
 
 		var expireDate = time.Now().Add(config.AccessTokenTime)
-		err = sessionEntity.UpdateSessionExpireById(sessionId)
+		err = sessionEntity.UpdateSessionExpireById(sessionId, config.AccessTokenTime)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

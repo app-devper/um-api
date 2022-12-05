@@ -33,8 +33,7 @@ func AddAdmin(userEntity repository.IUser) gin.HandlerFunc {
 		userId := ctx.GetString("UserId")
 		found, _ := userEntity.GetUserByUsername(req.Username)
 		if found != nil {
-			err = errors.New("username is taken")
-			ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": err.Error()})
+			ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "username is taken"})
 			return
 		}
 
@@ -58,8 +57,8 @@ func AddUser(userEntity repository.IUser) gin.HandlerFunc {
 		}
 
 		clientId := ctx.GetString("ClientId")
-		if len(req.ClientId) != 3 || req.ClientId == "000" || req.ClientId != clientId {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "client id invalid"})
+		if len(req.ClientId) != 3 || req.ClientId != clientId {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid client id"})
 			return
 		}
 
@@ -117,8 +116,7 @@ func DeleteUserById(userEntity repository.IUser) gin.HandlerFunc {
 		userId := ctx.GetString("UserId")
 		id := ctx.Param("id")
 		if userId == id {
-			err := errors.New("can't delete self user")
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "can't delete self user"})
 			return
 		}
 
@@ -201,13 +199,20 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 
 		userId := ctx.GetString("UserId")
 		id := ctx.Param("id")
-		if userId == id {
-			err := errors.New("can't update self user")
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		role := ctx.GetString("Role")
+		clientId := ctx.GetString("ClientId")
+
+		if req.Role == constant.SUPER && role != constant.SUPER {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid role"})
 			return
 		}
 
-		clientId := ctx.GetString("ClientId")
+		err = userEntity.ValidateUserRole(role, id)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateRoleById(id, clientId, req)
 		if err != nil {
@@ -229,13 +234,15 @@ func UpdateStatusById(userEntity repository.IUser) gin.HandlerFunc {
 
 		id := ctx.Param("id")
 		userId := ctx.GetString("UserId")
-		if userId == id {
-			err = errors.New("can't update self user")
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		role := ctx.GetString("Role")
+		clientId := ctx.GetString("ClientId")
+
+		err = userEntity.ValidateUserRole(role, id)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 
-		clientId := ctx.GetString("ClientId")
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateStatusById(id, clientId, req)
 		if err != nil {
@@ -278,7 +285,15 @@ func UpdateUserById(userEntity repository.IUser) gin.HandlerFunc {
 
 		clientId := ctx.GetString("ClientId")
 		userId := ctx.GetString("UserId")
+		role := ctx.GetString("Role")
 		id := ctx.Param("id")
+
+		err = userEntity.ValidateUserRole(role, id)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateUserById(id, clientId, req)
 		if err != nil {

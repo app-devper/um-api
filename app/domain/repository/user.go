@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -33,6 +34,7 @@ type IUser interface {
 	UpdateRoleById(id string, clientId string, form request.UpdateRole) (*model.User, error)
 	ChangePassword(id string, clientId string, form request.ChangePassword) (*model.User, error)
 	SetPassword(id string, clientId string, form request.SetPassword) (*model.User, error)
+	ValidateUserRole(role string, id string) error
 }
 
 func NewUserEntity(resource *db.Resource) IUser {
@@ -85,7 +87,7 @@ func (entity *userEntity) GetUserAll(clientId string) ([]model.User, error) {
 	var usersList []model.User
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	cursor, err := entity.userRepo.Find(ctx, bson.M{"clientId": clientId})
+	cursor, err := entity.userRepo.Find(ctx, bson.M{"clientId": clientId, "role": bson.M{"$ne": constant.SUPER}})
 	if err != nil {
 		return nil, err
 	}
@@ -312,4 +314,29 @@ func (entity *userEntity) SetPassword(id string, clientId string, form request.S
 		return nil, err
 	}
 	return user, nil
+}
+
+func (entity *userEntity) ValidateUserRole(role string, id string) error {
+	logrus.Info("ValidateRole")
+	user, err := entity.GetUserById(id)
+	if err != nil {
+		return err
+	}
+	var isErr = false
+	if role == constant.SUPER {
+		if user.Role == constant.SUPER || user.Role == constant.USER {
+			isErr = true
+		}
+	} else if role == constant.ADMIN {
+		if user.Role == constant.SUPER || user.Role == constant.ADMIN {
+			isErr = true
+		}
+	} else {
+		isErr = true
+	}
+	if isErr {
+		return errors.New("invalid role permission")
+	} else {
+		return nil
+	}
 }
