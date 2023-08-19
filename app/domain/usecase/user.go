@@ -264,6 +264,7 @@ func UpdateUserInfo(userEntity repository.IUser) gin.HandlerFunc {
 
 		userId := ctx.GetString("UserId")
 		clientId := ctx.GetString("ClientId")
+
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateUserById(userId, clientId, req)
 		if err != nil {
@@ -285,13 +286,15 @@ func UpdateUserById(userEntity repository.IUser) gin.HandlerFunc {
 
 		clientId := ctx.GetString("ClientId")
 		userId := ctx.GetString("UserId")
-		role := ctx.GetString("Role")
 		id := ctx.Param("id")
 
-		err = userEntity.ValidateUserRole(role, id)
-		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
-			return
+		if userId != id {
+			role := ctx.GetString("Role")
+			err = userEntity.ValidateUserRole(role, id)
+			if err != nil {
+				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
+				return
+			}
 		}
 
 		req.UpdatedBy = userId
