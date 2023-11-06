@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"um/app/domain/repository"
 	"um/app/featues/request"
+	"um/middlewares"
 )
 
 func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		system := ctx.GetString("System")
-		clientId := ctx.GetString("ClientId")
+		system := ctx.GetString(middlewares.System)
+		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := systemEntity.GetSystem(clientId, system)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -40,7 +41,7 @@ func AddSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 
 		req.CreatedBy = userId
 		result, err := systemEntity.CreateSystem(req)
@@ -84,7 +85,7 @@ func UpdateSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		id := ctx.Param("id")
 		req.UpdatedBy = userId
 		result, err := systemEntity.UpdateSystemById(id, req)

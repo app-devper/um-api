@@ -18,50 +18,50 @@ func ApplyAdminUserAPI(
 
 	route.GET("",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.GetUsersByClientId(userEntity),
 	)
 
 	route.POST("",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.AddUser(userEntity),
 	)
 
 	route.GET("/:id",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.GetUserById(userEntity),
 	)
 
 	route.DELETE("/:id",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.DeleteUserById(userEntity),
 	)
 
 	route.PUT("/:id",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.UpdateUserById(userEntity),
 	)
 
 	route.PATCH("/:id/status",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.UpdateStatusById(userEntity),
 	)
 
 	route.PATCH("/:id/role",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
 		middlewares.RequireAuthorization(constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
 		usecase.UpdateRoleById(userEntity),
 	)
 }

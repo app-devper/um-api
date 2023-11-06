@@ -8,6 +8,7 @@ import (
 	"um/app/core/utils"
 	"um/app/domain/repository"
 	"um/app/featues/request"
+	"um/middlewares"
 )
 
 func GetUsers(userEntity repository.IUser) gin.HandlerFunc {
@@ -30,7 +31,7 @@ func AddAdmin(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		found, _ := userEntity.GetUserByUsername(req.Username)
 		if found != nil {
 			ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "username is taken"})
@@ -56,13 +57,13 @@ func AddUser(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		clientId := ctx.GetString("ClientId")
+		clientId := ctx.GetString(middlewares.ClientId)
 		if len(req.ClientId) != 3 || req.ClientId != clientId {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid client id"})
 			return
 		}
 
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		found, _ := userEntity.GetUserByUsername(req.Username)
 		if found != nil {
 			ctx.AbortWithStatusJSON(http.StatusConflict, gin.H{"error": "username is taken"})
@@ -88,7 +89,7 @@ func ChangePassword(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -101,7 +102,7 @@ func ChangePassword(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		clientId := ctx.GetString("ClientId")
+		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := userEntity.ChangePassword(user.Id.Hex(), clientId, req)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -113,14 +114,14 @@ func ChangePassword(userEntity repository.IUser) gin.HandlerFunc {
 
 func DeleteUserById(userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		id := ctx.Param("id")
 		if userId == id {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "can't delete self user"})
 			return
 		}
 
-		clientId := ctx.GetString("ClientId")
+		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := userEntity.RemoveUserById(id, clientId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -133,7 +134,7 @@ func DeleteUserById(userEntity repository.IUser) gin.HandlerFunc {
 func GetUserById(userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		id := ctx.Param("id")
-		clientId := ctx.GetString("ClientId")
+		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := userEntity.GetUserByClientId(id, clientId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -145,7 +146,7 @@ func GetUserById(userEntity repository.IUser) gin.HandlerFunc {
 
 func GetUserInfo(userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		result, err := userEntity.GetUserById(userId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -157,7 +158,7 @@ func GetUserInfo(userEntity repository.IUser) gin.HandlerFunc {
 
 func GetUsersByClientId(userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		clientId := ctx.GetString("ClientId")
+		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := userEntity.GetUserAll(clientId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -176,8 +177,8 @@ func SetPassword(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
-		clientId := ctx.GetString("ClientId")
+		userId := ctx.GetString(middlewares.UserId)
+		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := userEntity.SetPassword(userId, clientId, req)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -197,22 +198,21 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
-		id := ctx.Param("id")
-		role := ctx.GetString("Role")
-		clientId := ctx.GetString("ClientId")
-
+		role := ctx.GetString(middlewares.Role)
 		if req.Role == constant.SUPER && role != constant.SUPER {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid role"})
 			return
 		}
 
+		id := ctx.Param("id")
 		err = userEntity.ValidateUserRole(role, id)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 
+		userId := ctx.GetString(middlewares.UserId)
+		clientId := ctx.GetString(middlewares.ClientId)
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateRoleById(id, clientId, req)
 		if err != nil {
@@ -232,17 +232,17 @@ func UpdateStatusById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		id := ctx.Param("id")
-		userId := ctx.GetString("UserId")
-		role := ctx.GetString("Role")
-		clientId := ctx.GetString("ClientId")
+		role := ctx.GetString(middlewares.Role)
 
+		id := ctx.Param("id")
 		err = userEntity.ValidateUserRole(role, id)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
 			return
 		}
 
+		userId := ctx.GetString(middlewares.UserId)
+		clientId := ctx.GetString(middlewares.ClientId)
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateStatusById(id, clientId, req)
 		if err != nil {
@@ -262,8 +262,8 @@ func UpdateUserInfo(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
-		clientId := ctx.GetString("ClientId")
+		userId := ctx.GetString(middlewares.UserId)
+		clientId := ctx.GetString(middlewares.ClientId)
 
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateUserById(userId, clientId, req)
@@ -284,18 +284,19 @@ func UpdateUserById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		clientId := ctx.GetString("ClientId")
-		userId := ctx.GetString("UserId")
 		id := ctx.Param("id")
 
+		userId := ctx.GetString(middlewares.UserId)
 		if userId != id {
-			role := ctx.GetString("Role")
+			role := ctx.GetString(middlewares.Role)
 			err = userEntity.ValidateUserRole(role, id)
 			if err != nil {
 				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": err.Error()})
 				return
 			}
 		}
+
+		clientId := ctx.GetString(middlewares.ClientId)
 
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateUserById(id, clientId, req)

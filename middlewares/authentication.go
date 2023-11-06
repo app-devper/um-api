@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"time"
-	"um/app/domain/repository"
 )
 
 type AccessClaims struct {
@@ -73,29 +72,15 @@ func RequireAuthenticated() gin.HandlerFunc {
 			return
 		}
 
-		ctx.Set("SessionId", claims.Id)
-		ctx.Set("Role", claims.Role)
-		ctx.Set("System", claims.System)
-		ctx.Set("ClientId", claims.ClientId)
+		ctx.Set(SessionId, claims.Id)
+		ctx.Set(Role, claims.Role)
+		ctx.Set(System, claims.System)
+		ctx.Set(ClientId, claims.ClientId)
 
 		logrus.Info("SessionId: " + claims.Id)
 		logrus.Info("Role: " + claims.Role)
 		logrus.Info("System: " + claims.System)
 		logrus.Info("ClientId: " + claims.ClientId)
-		return
-	}
-}
-
-func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		sessionId := ctx.GetString("SessionId")
-		userId, err := sessionEntity.GetSessionById(sessionId)
-		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session invalid"})
-			return
-		}
-		ctx.Set("UserId", userId)
-		logrus.Info("UserId: " + userId)
 		return
 	}
 }

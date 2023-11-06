@@ -3,14 +3,29 @@ package usecase
 import (
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 	"net/http"
 	"time"
+	"um/app/core/config"
 	"um/app/core/utils"
 	"um/app/domain/repository"
 	"um/app/featues/request"
-	"um/config"
 	"um/middlewares"
 )
+
+func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		sessionId := ctx.GetString(middlewares.SessionId)
+		userId, err := sessionEntity.GetSessionById(sessionId)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session invalid"})
+			return
+		}
+		ctx.Set(middlewares.UserId, userId)
+		logrus.Info("UserId: " + userId)
+		return
+	}
+}
 
 func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
@@ -26,7 +41,7 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 			return
 		}
 
-		var expireDate = time.Now().Add(config.AccessTokenTime)
+		expireDate := time.Now().Add(config.AccessTokenTime)
 
 		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
 		if err != nil {
@@ -51,8 +66,8 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 
 func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		sessionId := ctx.GetString("SessionId")
-		userId := ctx.GetString("UserId")
+		sessionId := ctx.GetString(middlewares.SessionId)
+		userId := ctx.GetString(middlewares.UserId)
 
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
@@ -60,14 +75,14 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 			return
 		}
 
-		var expireDate = time.Now().Add(config.AccessTokenTime)
+		expireDate := time.Now().Add(config.AccessTokenTime)
 		err = sessionEntity.UpdateSessionExpireById(sessionId, config.AccessTokenTime)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
 
-		system := ctx.GetString("System")
+		system := ctx.GetString(middlewares.System)
 		param := &middlewares.TokenParam{
 			SessionId:      sessionId,
 			Role:           user.Role,
@@ -85,7 +100,7 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 
 func Logout(sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		sessionId := ctx.GetString("SessionId")
+		sessionId := ctx.GetString(middlewares.SessionId)
 		_ = sessionEntity.RemoveSessionById(sessionId)
 		result := gin.H{
 			"message": "success",
@@ -102,7 +117,7 @@ func VerifyPassword(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString("UserId")
+		userId := ctx.GetString(middlewares.UserId)
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})

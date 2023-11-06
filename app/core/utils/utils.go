@@ -11,9 +11,8 @@ func InitContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-const otpChars = "1234567890"
-
 func GenerateCode(length int) string {
+	const otpChars = "1234567890"
 	buffer := make([]byte, length)
 	_, err := rand.Read(buffer)
 	if err != nil {
@@ -26,9 +25,8 @@ func GenerateCode(length int) string {
 	return string(buffer)
 }
 
-const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
 func GenerateRefId(length int) string {
+	const alphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	buffer := make([]byte, length)
 	_, err := rand.Read(buffer)
 	if err != nil {

@@ -22,25 +22,25 @@ func ApplyAuthAPI(
 
 	route.GET("/keep-alive",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity),
 		usecase.KeepAlive(userEntity, sessionEntity),
 	)
 
 	route.GET("/system",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity),
 		usecase.GetSystem(systemEntity),
 	)
 
 	route.POST("/verify-password",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity),
 		usecase.VerifyPassword(userEntity),
 	)
 
 	route.POST("/logout",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity),
 		usecase.Logout(sessionEntity),
 	)
 }

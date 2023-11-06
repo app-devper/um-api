@@ -27,6 +27,8 @@ func InitResource() (*Resource, error) {
 	if err != nil {
 		log.Print(err)
 	}
+
+	// Mongo client
 	host := os.Getenv("MONGO_HOST")
 	umDbName := os.Getenv("MONGO_UM_DB_NAME")
 	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(host))
@@ -39,6 +41,8 @@ func InitResource() (*Resource, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Redis client
 	redisHost := os.Getenv("REDIS_HOST")
 	redisOp, err := redis.ParseURL(redisHost)
 	if err != nil {
@@ -49,6 +53,7 @@ func InitResource() (*Resource, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	return &Resource{
 		UmDb: mongoClient.Database(umDbName),
 		RdDB: rdb,
