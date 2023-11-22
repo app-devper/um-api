@@ -1,8 +1,8 @@
 package middlewares
 
 import (
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
@@ -14,7 +14,7 @@ type AccessClaims struct {
 	Role     string `json:"role"`
 	System   string `json:"system"`
 	ClientId string `json:"clientId"`
-	jwt.StandardClaims
+	jwt.RegisteredClaims
 }
 
 type TokenParam struct {
@@ -31,11 +31,9 @@ func GenerateJwtToken(param *TokenParam) string {
 		Role:     param.Role,
 		System:   param.System,
 		ClientId: param.ClientId,
-		StandardClaims: jwt.StandardClaims{
-			Id:        param.SessionId,
-			ExpiresAt: param.ExpirationTime.Unix(),
-			Audience:  "domain",
-			Issuer:    "uit",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        param.SessionId,
+			ExpiresAt: jwt.NewNumericDate(param.ExpirationTime),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -67,17 +65,17 @@ func RequireAuthenticated() gin.HandlerFunc {
 			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 			return
 		}
-		if tkn == nil || !tkn.Valid || claims.Id == "" {
+		if tkn == nil || !tkn.Valid || claims.ID == "" {
 			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token invalid"})
 			return
 		}
 
-		ctx.Set(SessionId, claims.Id)
+		ctx.Set(SessionId, claims.ID)
 		ctx.Set(Role, claims.Role)
 		ctx.Set(System, claims.System)
 		ctx.Set(ClientId, claims.ClientId)
 
-		logrus.Info("SessionId: " + claims.Id)
+		logrus.Info("SessionId: " + claims.ID)
 		logrus.Info("Role: " + claims.Role)
 		logrus.Info("System: " + claims.System)
 		logrus.Info("ClientId: " + claims.ClientId)

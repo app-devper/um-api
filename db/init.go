@@ -31,13 +31,9 @@ func InitResource() (*Resource, error) {
 	// Mongo client
 	host := os.Getenv("MONGO_HOST")
 	umDbName := os.Getenv("MONGO_UM_DB_NAME")
-	mongoClient, err := mongo.NewClient(options.Client().ApplyURI(host))
-	if err != nil {
-		return nil, err
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	err = mongoClient.Connect(ctx)
+	mongoClient, err := mongo.Connect(ctx, options.Client().ApplyURI(host))
 	if err != nil {
 		return nil, err
 	}
