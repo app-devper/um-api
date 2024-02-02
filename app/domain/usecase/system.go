@@ -8,11 +8,27 @@ import (
 	"um/middlewares"
 )
 
+func NotifyPosProductLotsExpire(systemEntity repository.ISystem) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		systemCode := "POS"
+		result, err := systemEntity.GetSystemsByCode(systemCode)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		path := "/api/pos/v1/products/lots/expire-notify"
+		for _, item := range result {
+			_, _ = middlewares.NotifyMassage(item.Host + path)
+		}
+		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+	}
+}
+
 func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		system := ctx.GetString(middlewares.System)
+		systemCode := ctx.GetString(middlewares.System)
 		clientId := ctx.GetString(middlewares.ClientId)
-		result, err := systemEntity.GetSystem(clientId, system)
+		result, err := systemEntity.GetSystem(clientId, systemCode)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -23,7 +39,14 @@ func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 
 func GetSystems(systemEntity repository.ISystem) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		result, err := systemEntity.GetSystemAll()
+		req := request.GetSystems{}
+		err := ctx.ShouldBind(&req)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		result, err := systemEntity.GetSystems(req)
 		if err != nil {
 			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return

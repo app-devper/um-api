@@ -18,10 +18,11 @@ type systemEntity struct {
 }
 
 type ISystem interface {
-	GetSystemAll() ([]model.System, error)
+	GetSystems(form request.GetSystems) ([]model.System, error)
 	GetSystemsByClientId(clientId string) ([]model.System, error)
+	GetSystemsByCode(systemCode string) ([]model.System, error)
 	GetSystemById(id string) (*model.System, error)
-	GetSystem(clientId string, code string) (*model.System, error)
+	GetSystem(clientId string, systemCode string) (*model.System, error)
 	CreateSystem(form request.System) (*model.System, error)
 	RemoveSystemById(id string) (*model.System, error)
 	UpdateSystemById(id string, form request.UpdateSystem) (*model.System, error)
@@ -33,12 +34,18 @@ func NewSystemEntity(resource *db.Resource) ISystem {
 	return entity
 }
 
-func (entity systemEntity) GetSystemAll() ([]model.System, error) {
-	logrus.Info("GetSystemAll")
-	var list []model.System
+func (entity systemEntity) GetSystems(form request.GetSystems) (items []model.System, err error) {
+	logrus.Info("GetSystems")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	cursor, err := entity.systemRepo.Find(ctx, bson.M{})
+	var queries = bson.M{}
+	if form.SystemCode != "" {
+		queries["systemCode"] = form.SystemCode
+	}
+	if form.ClientId != "" {
+		queries["clientId"] = form.ClientId
+	}
+	cursor, err := entity.systemRepo.Find(ctx, queries)
 	if err != nil {
 		return nil, err
 	}
@@ -49,30 +56,29 @@ func (entity systemEntity) GetSystemAll() ([]model.System, error) {
 			logrus.Error(err)
 			logrus.Info(cursor.Current)
 		} else {
-			list = append(list, item)
+			items = append(items, item)
 		}
 	}
-	if list == nil {
-		list = []model.System{}
+	if items == nil {
+		items = []model.System{}
 	}
-	return list, nil
+	return items, nil
 }
 
-func (entity systemEntity) GetSystem(clientId string, code string) (*model.System, error) {
+func (entity systemEntity) GetSystem(clientId string, systemCode string) (*model.System, error) {
 	logrus.Info("GetSystem")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 	var item model.System
-	err := entity.systemRepo.FindOne(ctx, bson.M{"clientId": clientId, "systemCode": code}).Decode(&item)
+	err := entity.systemRepo.FindOne(ctx, bson.M{"clientId": clientId, "systemCode": systemCode}).Decode(&item)
 	if err != nil {
 		return nil, err
 	}
 	return &item, nil
 }
 
-func (entity systemEntity) GetSystemsByClientId(clientId string) ([]model.System, error) {
+func (entity systemEntity) GetSystemsByClientId(clientId string) (items []model.System, err error) {
 	logrus.Info("GetSystemsByClientId")
-	var list []model.System
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 	cursor, err := entity.systemRepo.Find(ctx, bson.M{"clientId": clientId})
@@ -86,13 +92,37 @@ func (entity systemEntity) GetSystemsByClientId(clientId string) ([]model.System
 			logrus.Error(err)
 			logrus.Info(cursor.Current)
 		} else {
-			list = append(list, item)
+			items = append(items, item)
 		}
 	}
-	if list == nil {
-		list = []model.System{}
+	if items == nil {
+		items = []model.System{}
 	}
-	return list, nil
+	return items, nil
+}
+
+func (entity systemEntity) GetSystemsByCode(systemCode string) (items []model.System, err error) {
+	logrus.Info("GetSystemsByCode")
+	ctx, cancel := utils.InitContext()
+	defer cancel()
+	cursor, err := entity.systemRepo.Find(ctx, bson.M{"systemCode": systemCode})
+	if err != nil {
+		return nil, err
+	}
+	for cursor.Next(ctx) {
+		var item model.System
+		err = cursor.Decode(&item)
+		if err != nil {
+			logrus.Error(err)
+			logrus.Info(cursor.Current)
+		} else {
+			items = append(items, item)
+		}
+	}
+	if items == nil {
+		items = []model.System{}
+	}
+	return items, nil
 }
 
 func (entity systemEntity) GetSystemById(id string) (*model.System, error) {

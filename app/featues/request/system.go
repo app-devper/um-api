@@ -1,5 +1,10 @@
 package request
 
+type GetSystems struct {
+	ClientId   string `json:"clientId"`
+	SystemCode string `json:"systemCode"`
+}
+
 type System struct {
 	ClientId   string `json:"clientId"  binding:"required"`
 	SystemName string `json:"systemName"  binding:"required"`

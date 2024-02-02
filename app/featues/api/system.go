@@ -23,6 +23,10 @@ func ApplySystemAPI(
 		usecase.GetSystems(systemEntity),
 	)
 
+	route.GET("/pos/products/lots/expire-notify",
+		usecase.NotifyPosProductLotsExpire(systemEntity),
+	)
+
 	route.POST("",
 		middlewares.RequireAuthenticated(),
 		middlewares.RequireAuthorization(constant.SUPER),
