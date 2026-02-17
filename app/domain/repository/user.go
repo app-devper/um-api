@@ -1,12 +1,6 @@
 package repository
 
 import (
-	"errors"
-	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"strings"
 	"time"
 	"um/app/core/constant"
@@ -14,6 +8,12 @@ import (
 	"um/app/domain/model"
 	"um/app/featues/request"
 	"um/db"
+
+	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type userEntity struct {
@@ -34,12 +34,11 @@ type IUser interface {
 	UpdateRoleById(id string, clientId string, form request.UpdateRole) (*model.User, error)
 	ChangePassword(id string, clientId string, form request.ChangePassword) (*model.User, error)
 	SetPassword(id string, clientId string, form request.SetPassword) (*model.User, error)
-	ValidateUserRole(role string, id string) error
 }
 
 func NewUserEntity(resource *db.Resource) IUser {
 	userRepo := resource.UmDb.Collection("users")
-	var entity IUser = &userEntity{userRepo: userRepo}
+	entity := &userEntity{userRepo: userRepo}
 	_, _ = entity.CreateIndex()
 	return entity
 }
@@ -57,61 +56,61 @@ func (entity *userEntity) CreateIndex() (string, error) {
 	return ind, err
 }
 
-func (entity *userEntity) GetUsers() ([]model.User, error) {
+func (entity *userEntity) GetUsers() (items []model.User, err error) {
 	logrus.Info("GetUsers")
-	var usersList []model.User
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 	cursor, err := entity.userRepo.Find(ctx, bson.M{})
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var user model.User
+		user := model.User{}
 		err = cursor.Decode(&user)
 		if err != nil {
 			logrus.Error(err)
 			logrus.Info(cursor.Current)
 		} else {
-			usersList = append(usersList, user)
+			items = append(items, user)
 		}
 	}
-	if usersList == nil {
-		usersList = []model.User{}
+	if items == nil {
+		items = []model.User{}
 	}
-	return usersList, nil
+	return items, nil
 }
 
-func (entity *userEntity) GetUserAll(clientId string) ([]model.User, error) {
+func (entity *userEntity) GetUserAll(clientId string) (items []model.User, err error) {
 	logrus.Info("GetUserAll")
-	var usersList []model.User
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 	cursor, err := entity.userRepo.Find(ctx, bson.M{"clientId": clientId, "role": bson.M{"$ne": constant.SUPER}})
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var user model.User
+		user := model.User{}
 		err = cursor.Decode(&user)
 		if err != nil {
 			logrus.Error(err)
 			logrus.Info(cursor.Current)
 		} else {
-			usersList = append(usersList, user)
+			items = append(items, user)
 		}
 	}
-	if usersList == nil {
-		usersList = []model.User{}
+	if items == nil {
+		items = []model.User{}
 	}
-	return usersList, nil
+	return items, nil
 }
 
 func (entity *userEntity) GetUserByUsername(username string) (*model.User, error) {
 	logrus.Info("GetUserByUsername")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var user model.User
+	user := model.User{}
 	err := entity.userRepo.FindOne(ctx, bson.M{"username": strings.TrimSpace(username)}).Decode(&user)
 	if err != nil {
 		return nil, err
@@ -124,8 +123,8 @@ func (entity *userEntity) CreateUser(form request.User, role string) (*model.Use
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 
-	var userId = primitive.NewObjectID()
-	var createdBy = userId
+	userId := primitive.NewObjectID()
+	createdBy := userId
 	if form.CreatedBy != "" {
 		createdBy, _ = primitive.ObjectIDFromHex(form.CreatedBy)
 	}
@@ -154,9 +153,12 @@ func (entity *userEntity) GetUserById(id string) (*model.User, error) {
 	logrus.Info("GetUserById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var user model.User
-	objId, _ := primitive.ObjectIDFromHex(id)
-	err := entity.userRepo.FindOne(ctx, bson.M{"_id": objId}).Decode(&user)
+	user := model.User{}
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	err = entity.userRepo.FindOne(ctx, bson.M{"_id": objId}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -167,9 +169,16 @@ func (entity *userEntity) GetUserByClientId(id string, clientId string) (*model.
 	logrus.Info("GetUserByClientId")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var user model.User
-	objId, _ := primitive.ObjectIDFromHex(id)
-	err := entity.userRepo.FindOne(ctx, bson.M{"_id": objId, "clientId": clientId}).Decode(&user)
+	user := model.User{}
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOne(ctx, filter).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -180,13 +189,20 @@ func (entity *userEntity) RemoveUserById(id string, clientId string) (*model.Use
 	logrus.Info("RemoveUserById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var user model.User
-	objId, _ := primitive.ObjectIDFromHex(id)
-	err := entity.userRepo.FindOne(ctx, bson.M{"_id": objId, "clientId": clientId}).Decode(&user)
+	user := model.User{}
+	objId, err := primitive.ObjectIDFromHex(id)
 	if err != nil {
 		return nil, err
 	}
-	_, err = entity.userRepo.DeleteOne(ctx, bson.M{"_id": objId, "clientId": clientId})
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOne(ctx, filter).Decode(&user)
+	if err != nil {
+		return nil, err
+	}
+	_, err = entity.userRepo.DeleteOne(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +213,10 @@ func (entity *userEntity) UpdateUserById(id string, clientId string, form reques
 	logrus.Info("UpdateUserById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	objId, _ := primitive.ObjectIDFromHex(id)
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 	user, err := entity.GetUserById(id)
 	if err != nil {
 		return nil, err
@@ -214,7 +233,11 @@ func (entity *userEntity) UpdateUserById(id string, clientId string, form reques
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &isReturnNewDoc,
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, bson.M{"_id": objId, "clientId": clientId}, bson.M{"$set": user}, opts).Decode(&user)
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +248,10 @@ func (entity *userEntity) UpdateStatusById(id string, clientId string, form requ
 	logrus.Info("UpdateStatusById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	objId, _ := primitive.ObjectIDFromHex(id)
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 	user, err := entity.GetUserById(id)
 	if err != nil {
 		return nil, err
@@ -238,7 +264,11 @@ func (entity *userEntity) UpdateStatusById(id string, clientId string, form requ
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &isReturnNewDoc,
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, bson.M{"_id": objId, "clientId": clientId}, bson.M{"$set": user}, opts).Decode(&user)
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +279,10 @@ func (entity *userEntity) UpdateRoleById(id string, clientId string, form reques
 	logrus.Info("UpdateRoleById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	objId, _ := primitive.ObjectIDFromHex(id)
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 	user, err := entity.GetUserById(id)
 	if err != nil {
 		return nil, err
@@ -263,7 +296,11 @@ func (entity *userEntity) UpdateRoleById(id string, clientId string, form reques
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &isReturnNewDoc,
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, bson.M{"_id": objId, "clientId": clientId}, bson.M{"$set": user}, opts).Decode(&user)
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +311,10 @@ func (entity *userEntity) ChangePassword(id string, clientId string, form reques
 	logrus.Info("ChangePassword")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	objId, _ := primitive.ObjectIDFromHex(id)
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 	user, err := entity.GetUserById(id)
 	if err != nil {
 		return nil, err
@@ -286,7 +326,11 @@ func (entity *userEntity) ChangePassword(id string, clientId string, form reques
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &isReturnNewDoc,
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, bson.M{"_id": objId, "clientId": clientId}, bson.M{"$set": user}, opts).Decode(&user)
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -297,46 +341,28 @@ func (entity *userEntity) SetPassword(id string, clientId string, form request.S
 	logrus.Info("SetPassword")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	objId, _ := primitive.ObjectIDFromHex(id)
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 	user, err := entity.GetUserById(id)
 	if err != nil {
 		return nil, err
 	}
 	user.Password = utils.HashPassword(form.Password)
-	user.UpdatedBy = objId
+	user.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
 	user.UpdatedDate = time.Now()
 	isReturnNewDoc := options.After
 	opts := &options.FindOneAndUpdateOptions{
 		ReturnDocument: &isReturnNewDoc,
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, bson.M{"_id": objId, "clientId": clientId}, bson.M{"$set": user}, opts).Decode(&user)
+	filter := bson.M{"_id": objId}
+	if clientId != "" {
+		filter["clientId"] = clientId
+	}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
 	return user, nil
-}
-
-func (entity *userEntity) ValidateUserRole(role string, id string) error {
-	logrus.Info("ValidateRole")
-	user, err := entity.GetUserById(id)
-	if err != nil {
-		return err
-	}
-	var isErr = false
-	if role == constant.SUPER {
-		if user.Role == constant.SUPER || user.Role == constant.USER {
-			isErr = true
-		}
-	} else if role == constant.ADMIN {
-		if user.Role == constant.SUPER || user.Role == constant.ADMIN {
-			isErr = true
-		}
-	} else {
-		isErr = true
-	}
-	if isErr {
-		return errors.New("invalid role permission")
-	} else {
-		return nil
-	}
 }

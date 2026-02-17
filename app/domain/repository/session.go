@@ -2,11 +2,12 @@ package repository
 
 import (
 	"context"
+	"time"
+	"um/db"
+
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
-	"time"
-	"um/db"
 )
 
 type sessionEntity struct {
@@ -21,7 +22,7 @@ type ISession interface {
 }
 
 func NewSessionEntity(resource *db.Resource) ISession {
-	var entity ISession = &sessionEntity{rdb: resource.RdDB}
+	entity := &sessionEntity{rdb: resource.RdDB}
 	return entity
 }
 
@@ -42,7 +43,7 @@ func (entity *sessionEntity) UpdateSessionExpireById(sessionId string, expiratio
 	if err != nil {
 		return err
 	}
-	return err
+	return nil
 }
 
 func (entity *sessionEntity) GetSessionById(sessionId string) (string, error) {

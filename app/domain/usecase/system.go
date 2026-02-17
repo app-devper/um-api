@@ -1,28 +1,14 @@
 package usecase
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"um/app/core/errs"
 	"um/app/domain/repository"
 	"um/app/featues/request"
 	"um/middlewares"
-)
 
-func NotifyPosProductLotsExpire(systemEntity repository.ISystem) gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		systemCode := "POS"
-		result, err := systemEntity.GetSystemsByCode(systemCode)
-		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		path := "/api/pos/v1/products/lots/expire-notify"
-		for _, item := range result {
-			_, _ = middlewares.NotifyMassage(item.Host + path)
-		}
-		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
-	}
-}
+	"github.com/gin-gonic/gin"
+)
 
 func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
@@ -30,7 +16,7 @@ func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := systemEntity.GetSystem(clientId, systemCode)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -42,13 +28,13 @@ func GetSystems(systemEntity repository.ISystem) gin.HandlerFunc {
 		req := request.GetSystems{}
 		err := ctx.ShouldBind(&req)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
 		result, err := systemEntity.GetSystems(req)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -60,7 +46,7 @@ func AddSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 		req := request.System{}
 		err := ctx.ShouldBind(&req)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
@@ -69,7 +55,7 @@ func AddSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 		req.CreatedBy = userId
 		result, err := systemEntity.CreateSystem(req)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -81,7 +67,7 @@ func GetSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		id := ctx.Param("id")
 		result, err := systemEntity.GetSystemById(id)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -93,7 +79,7 @@ func DeleteSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		id := ctx.Param("id")
 		result, err := systemEntity.RemoveSystemById(id)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -105,7 +91,7 @@ func UpdateSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		req := request.UpdateSystem{}
 		err := ctx.ShouldBind(&req)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		userId := ctx.GetString(middlewares.UserId)
@@ -113,7 +99,7 @@ func UpdateSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		req.UpdatedBy = userId
 		result, err := systemEntity.UpdateSystemById(id, req)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)

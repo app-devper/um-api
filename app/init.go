@@ -1,13 +1,14 @@
 package app
 
 import (
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"os"
 	"um/app/domain/repository"
 	"um/app/featues/api"
 	"um/db"
 	"um/middlewares"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type Routes struct {
@@ -39,8 +40,6 @@ func (app Routes) StartGin() {
 
 	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity)
 	api.ApplyUserAPI(publicRoute, userEntity, sessionEntity)
-	api.ApplyAdminUserAPI(publicRoute, userEntity, sessionEntity)
-	api.ApplySuperUserAPI(publicRoute, userEntity, sessionEntity)
 	api.ApplySystemAPI(publicRoute, systemEntity, sessionEntity)
 
 	r.NoRoute(middlewares.NoRoute())

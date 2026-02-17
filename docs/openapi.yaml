@@ -1,0 +1,946 @@
+openapi: 3.0.3
+info:
+  title: User Management API
+  description: |
+    User management (UM) API for managing users, authentication, authorization, and system access.
+    
+    ## Roles
+    - **SUPER** — Full access across all clients
+    - **ADMIN** — Manages users within their own client
+    - **USER** — Self-service only
+    
+    ## Error Format
+    All error responses return a JSON body with `code` and `message` fields.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8585/api/um/v1
+    description: Local development
+
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: User
+    description: User management
+  - name: System
+    description: System management (SUPER only)
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    AppError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "UM-400-001"
+        message:
+          type: string
+          example: "bad request"
+      required:
+        - code
+        - message
+
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        system:
+          type: string
+      required:
+        - username
+        - password
+        - system
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+
+    KeepAliveResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+
+    VerifyPasswordRequest:
+      type: object
+      properties:
+        password:
+          type: string
+        objective:
+          type: string
+      required:
+        - password
+        - objective
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: "success"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          description: MongoDB ObjectID
+          example: "507f1f77bcf86cd799439011"
+        firstName:
+          type: string
+        lastName:
+          type: string
+        username:
+          type: string
+        clientId:
+          type: string
+        role:
+          type: string
+          enum: [SUPER, ADMIN, USER]
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        phone:
+          type: string
+        email:
+          type: string
+        createdBy:
+          type: string
+        createdDate:
+          type: string
+          format: date-time
+        updatedBy:
+          type: string
+        updatedDate:
+          type: string
+          format: date-time
+
+    CreateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        username:
+          type: string
+        password:
+          type: string
+        clientId:
+          type: string
+          description: Must be exactly 3 characters
+          minLength: 3
+          maxLength: 3
+      required:
+        - username
+        - password
+        - clientId
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        firstName:
+          type: string
+        lastName:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+      required:
+        - firstName
+        - lastName
+
+    ChangePasswordRequest:
+      type: object
+      properties:
+        oldPassword:
+          type: string
+        newPassword:
+          type: string
+      required:
+        - oldPassword
+        - newPassword
+
+    SetPasswordRequest:
+      type: object
+      properties:
+        password:
+          type: string
+      required:
+        - password
+
+    UpdateRoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [SUPER, ADMIN, USER]
+      required:
+        - role
+
+    UpdateStatusRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+      required:
+        - status
+
+    System:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "507f1f77bcf86cd799439011"
+        clientId:
+          type: string
+        systemName:
+          type: string
+        systemCode:
+          type: string
+        host:
+          type: string
+
+    CreateSystemRequest:
+      type: object
+      properties:
+        clientId:
+          type: string
+        systemName:
+          type: string
+        systemCode:
+          type: string
+        host:
+          type: string
+      required:
+        - clientId
+        - systemName
+        - systemCode
+        - host
+
+    UpdateSystemRequest:
+      type: object
+      properties:
+        systemName:
+          type: string
+        host:
+          type: string
+      required:
+        - systemName
+        - host
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AppError"
+          example:
+            code: "UM-400-001"
+            message: "bad request"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AppError"
+          examples:
+            MissingHeader:
+              value:
+                code: "UM-401-001"
+                message: "missing authorization header"
+            TokenInvalid:
+              value:
+                code: "UM-401-002"
+                message: "token invalid"
+            SessionInvalid:
+              value:
+                code: "UM-401-003"
+                message: "session invalid"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AppError"
+          examples:
+            Forbidden:
+              value:
+                code: "UM-403-001"
+                message: "Invalid request, restricted endpoint"
+            NoPermission:
+              value:
+                code: "UM-403-002"
+                message: "Don't have permission"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AppError"
+          example:
+            code: "UM-404-001"
+            message: "Service Missing / Not found."
+    Conflict:
+      description: Conflict
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AppError"
+          example:
+            code: "UM-409-001"
+            message: "username is taken"
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/AppError"
+          example:
+            code: "UM-500-001"
+            message: "internal server error"
+
+paths:
+  # ── Auth ──────────────────────────────────────────────
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      description: Authenticate with username and password. Returns a JWT access token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Wrong credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              example:
+                code: "UM-401-004"
+                message: "wrong username or password"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /auth/keep-alive:
+    get:
+      tags: [Auth]
+      summary: Refresh token
+      description: Extends the session and returns a new access token.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KeepAliveResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /auth/system:
+    get:
+      tags: [Auth]
+      summary: Get current system
+      description: Returns the system associated with the current session's clientId and system code.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: System info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/verify-password:
+    post:
+      tags: [Auth]
+      summary: Verify password
+      description: Verify the current user's password before performing a sensitive action.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyPasswordRequest"
+      responses:
+        "200":
+          description: Password verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Wrong password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              example:
+                code: "UM-400-002"
+                message: "wrong password"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout
+      description: Ends the current session.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── User (self-service) ───────────────────────────────
+  /user/info:
+    get:
+      tags: [User]
+      summary: Get own user info
+      description: Returns the current authenticated user's profile.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: User info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [User]
+      summary: Update own user info
+      description: Update the current authenticated user's profile.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /user/change-password:
+    put:
+      tags: [User]
+      summary: Change own password
+      description: Change the current user's password by providing the old and new passwords.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Wrong password or bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              examples:
+                WrongPassword:
+                  value:
+                    code: "UM-400-002"
+                    message: "wrong password"
+                BadRequest:
+                  value:
+                    code: "UM-400-001"
+                    message: "bad request"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # ── User (management) ────────────────────────────────
+  /user:
+    get:
+      tags: [User]
+      summary: List users
+      description: |
+        Returns a list of users.
+        - **SUPER**: all users
+        - **ADMIN**: users within the same clientId (excluding SUPER users)
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [User]
+      summary: Create user
+      description: |
+        Create a new user.
+        - **SUPER**: creates an ADMIN user (any valid clientId)
+        - **ADMIN**: creates a USER within their own clientId
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "200":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /user/{id}:
+    get:
+      tags: [User]
+      summary: Get user by ID
+      description: |
+        Retrieve a specific user.
+        - **SUPER**: can access any user
+        - **ADMIN**: can only access users within their own clientId
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      responses:
+        "200":
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags: [User]
+      summary: Delete user
+      description: |
+        Delete a user by ID. Cannot delete yourself.
+        Role hierarchy is enforced (SUPER cannot delete SUPER, ADMIN cannot delete SUPER or ADMIN).
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      responses:
+        "200":
+          description: Deleted user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Bad request or self-delete attempt
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              examples:
+                DeleteSelf:
+                  value:
+                    code: "UM-400-005"
+                    message: "can't delete self user"
+                BadRequest:
+                  value:
+                    code: "UM-400-001"
+                    message: "bad request"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [User]
+      summary: Update user
+      description: |
+        Update a user's profile by ID.
+        Role hierarchy is enforced when updating other users.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /user/{id}/status:
+    patch:
+      tags: [User]
+      summary: Update user status
+      description: Set a user's status to ACTIVE or INACTIVE. Role hierarchy is enforced.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStatusRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /user/{id}/role:
+    patch:
+      tags: [User]
+      summary: Update user role
+      description: |
+        Change a user's role. Role hierarchy is enforced.
+        Only SUPER can assign the SUPER role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateRoleRequest"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Bad request or invalid role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              examples:
+                InvalidRole:
+                  value:
+                    code: "UM-400-004"
+                    message: "invalid role"
+                BadRequest:
+                  value:
+                    code: "UM-400-001"
+                    message: "bad request"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /user/{id}/set-password:
+    patch:
+      tags: [User]
+      summary: Set user password
+      description: Admin/Super sets a user's password directly. Role hierarchy is enforced.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPasswordRequest"
+      responses:
+        "200":
+          description: Password set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  # ── System ────────────────────────────────────────────
+  /system:
+    get:
+      tags: [System]
+      summary: List systems
+      description: Returns a list of systems. Supports optional filtering by clientId and systemCode via query params.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: clientId
+          in: query
+          schema:
+            type: string
+          description: Filter by client ID
+        - name: systemCode
+          in: query
+          schema:
+            type: string
+          description: Filter by system code
+      responses:
+        "200":
+          description: List of systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      tags: [System]
+      summary: Create system
+      description: Create a new system entry.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSystemRequest"
+      responses:
+        "200":
+          description: Created system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /system/{id}:
+    get:
+      tags: [System]
+      summary: Get system by ID
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: System ObjectID
+      responses:
+        "200":
+          description: System found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags: [System]
+      summary: Delete system
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: System ObjectID
+      responses:
+        "200":
+          description: Deleted system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    put:
+      tags: [System]
+      summary: Update system
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: System ObjectID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSystemRequest"
+      responses:
+        "200":
+          description: Updated system
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"

@@ -1,11 +1,12 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
 	"um/app/core/constant"
 	"um/app/domain/repository"
 	"um/app/domain/usecase"
 	"um/middlewares"
+
+	"github.com/gin-gonic/gin"
 )
 
 func ApplySystemAPI(
@@ -21,10 +22,6 @@ func ApplySystemAPI(
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.RequireSession(sessionEntity),
 		usecase.GetSystems(systemEntity),
-	)
-
-	route.GET("/pos/products/lots/expire-notify",
-		usecase.NotifyPosProductLotsExpire(systemEntity),
 	)
 
 	route.POST("",

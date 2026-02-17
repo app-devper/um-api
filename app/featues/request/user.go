@@ -35,7 +35,8 @@ type ChangePassword struct {
 }
 
 type SetPassword struct {
-	Password string `json:"password" binding:"required"`
+	Password  string `json:"password" binding:"required"`
+	UpdatedBy string
 }
 
 type VerifyPassword struct {

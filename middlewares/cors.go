@@ -16,7 +16,6 @@ func NewCors(allowedOrigins []string) gin.HandlerFunc {
 			"Accept-Encoding", "Accept-Language", "Accept",
 			"X-CSRF-Token", "Authorization", "X-Requested-With", "X-Access-Token",
 		},
-		ExposeHeaders:    []string{"Content-Length"},
-		AllowCredentials: true,
+		ExposeHeaders: []string{"Content-Length"},
 	})
 }

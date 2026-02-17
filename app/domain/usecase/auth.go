@@ -1,16 +1,17 @@
 package usecase
 
 import (
-	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"net/http"
 	"time"
 	"um/app/core/config"
+	"um/app/core/errs"
 	"um/app/core/utils"
 	"um/app/domain/repository"
 	"um/app/featues/request"
 	"um/middlewares"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
@@ -18,12 +19,11 @@ func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
 		sessionId := ctx.GetString(middlewares.SessionId)
 		userId, err := sessionEntity.GetSessionById(sessionId)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session invalid"})
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrSessionInvalid, "session invalid"))
 			return
 		}
 		ctx.Set(middlewares.UserId, userId)
 		logrus.Info("UserId: " + userId)
-		return
 	}
 }
 
@@ -31,13 +31,16 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 	return func(ctx *gin.Context) {
 		req := request.Login{}
 		if err := ctx.ShouldBind(&req); err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 		user, err := userEntity.GetUserByUsername(req.Username)
-		if (user == nil) || utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
-			err = errors.New("wrong username or password")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		if err != nil || user == nil {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
+			return
+		}
+		if utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
 			return
 		}
 
@@ -45,7 +48,7 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 
 		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
@@ -56,7 +59,11 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 			ClientId:       user.ClientId,
 			ExpirationTime: expireDate,
 		}
-		token := middlewares.GenerateJwtToken(param)
+		token, err := middlewares.GenerateJwtToken(param)
+		if err != nil {
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
+			return
+		}
 		result := gin.H{
 			"accessToken": token,
 		}
@@ -71,14 +78,14 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
 		expireDate := time.Now().Add(config.AccessTokenTime)
 		err = sessionEntity.UpdateSessionExpireById(sessionId, config.AccessTokenTime)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
@@ -90,7 +97,11 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 			ClientId:       user.ClientId,
 			ExpirationTime: expireDate,
 		}
-		token := middlewares.GenerateJwtToken(param)
+		token, err := middlewares.GenerateJwtToken(param)
+		if err != nil {
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
+			return
+		}
 		result := gin.H{
 			"accessToken": token,
 		}
@@ -113,20 +124,19 @@ func VerifyPassword(userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.VerifyPassword{}
 		if err := ctx.ShouldBind(&req); err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
 		userId := ctx.GetString(middlewares.UserId)
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
 
-		if (user == nil) || utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
-			err = errors.New("wrong password")
-			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		if user == nil || utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrWrongPassword, "wrong password"))
 			return
 		}
 		result := gin.H{

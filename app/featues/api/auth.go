@@ -1,10 +1,11 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
 	"um/app/domain/repository"
 	"um/app/domain/usecase"
 	"um/middlewares"
+
+	"github.com/gin-gonic/gin"
 )
 
 func ApplyAuthAPI(
