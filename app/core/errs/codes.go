@@ -25,6 +25,9 @@ const (
 	// 404 Not Found
 	ErrNotFound = "UM-404-001"
 
+	// 429 Too Many Requests
+	ErrRateLimited = "UM-429-001"
+
 	// 500 Internal Server Error
 	ErrInternal       = "UM-500-001"
 	ErrTokenGenFailed = "UM-500-002"

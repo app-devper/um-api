@@ -38,7 +38,7 @@ func (app Routes) StartGin() {
 	sessionEntity := repository.NewSessionEntity(resource)
 	systemEntity := repository.NewSystemEntity(resource)
 
-	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity)
+	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity, resource.RdDB)
 	api.ApplyUserAPI(publicRoute, userEntity, sessionEntity)
 	api.ApplySystemAPI(publicRoute, systemEntity, sessionEntity)
 

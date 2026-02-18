@@ -1,11 +1,13 @@
 package api
 
 import (
+	"time"
 	"um/app/domain/repository"
 	"um/app/domain/usecase"
 	"um/middlewares"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 )
 
 func ApplyAuthAPI(
@@ -13,11 +15,13 @@ func ApplyAuthAPI(
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
 	systemEntity repository.ISystem,
+	rdb *redis.Client,
 ) {
 
 	route := app.Group("auth")
 
 	route.POST("/login",
+		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
 		usecase.Login(userEntity, sessionEntity),
 	)
 

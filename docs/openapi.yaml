@@ -60,6 +60,16 @@ components:
         - password
         - system
 
+    RateLimitError:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "UM-429-001"
+        message:
+          type: string
+          example: "too many requests, please try again later"
+
     LoginResponse:
       type: object
       properties:
@@ -137,10 +147,14 @@ components:
           type: string
         email:
           type: string
+          format: email
         username:
           type: string
+          minLength: 3
+          maxLength: 50
         password:
           type: string
+          minLength: 8
         clientId:
           type: string
           description: Must be exactly 3 characters
@@ -156,12 +170,15 @@ components:
       properties:
         firstName:
           type: string
+          minLength: 1
         lastName:
           type: string
+          minLength: 1
         phone:
           type: string
         email:
           type: string
+          format: email
       required:
         - firstName
         - lastName
@@ -173,6 +190,7 @@ components:
           type: string
         newPassword:
           type: string
+          minLength: 8
       required:
         - oldPassword
         - newPassword
@@ -182,6 +200,7 @@ components:
       properties:
         password:
           type: string
+          minLength: 8
       required:
         - password
 
@@ -308,6 +327,15 @@ components:
           example:
             code: "UM-409-001"
             message: "username is taken"
+    TooManyRequests:
+      description: Rate limit exceeded
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/RateLimitError"
+          example:
+            code: "UM-429-001"
+            message: "too many requests, please try again later"
     InternalServerError:
       description: Internal server error
       content:
@@ -349,6 +377,8 @@ paths:
               example:
                 code: "UM-401-004"
                 message: "wrong username or password"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
         "500":
           $ref: "#/components/responses/InternalServerError"
 

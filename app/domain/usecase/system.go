@@ -8,6 +8,7 @@ import (
 	"um/middlewares"
 
 	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
@@ -16,7 +17,8 @@ func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 		clientId := ctx.GetString(middlewares.ClientId)
 		result, err := systemEntity.GetSystem(clientId, systemCode)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -34,7 +36,8 @@ func GetSystems(systemEntity repository.ISystem) gin.HandlerFunc {
 
 		result, err := systemEntity.GetSystems(req)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -55,7 +58,8 @@ func AddSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 		req.CreatedBy = userId
 		result, err := systemEntity.CreateSystem(req)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -67,7 +71,8 @@ func GetSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		id := ctx.Param("id")
 		result, err := systemEntity.GetSystemById(id)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -79,7 +84,8 @@ func DeleteSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		id := ctx.Param("id")
 		result, err := systemEntity.RemoveSystemById(id)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
@@ -99,7 +105,8 @@ func UpdateSystemById(systemEntity repository.ISystem) gin.HandlerFunc {
 		req.UpdatedBy = userId
 		result, err := systemEntity.UpdateSystemById(id, req)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 		ctx.JSON(http.StatusOK, result)

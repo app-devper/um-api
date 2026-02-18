@@ -48,7 +48,8 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 
 		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 
@@ -78,14 +79,16 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 
 		expireDate := time.Now().Add(config.AccessTokenTime)
 		err = sessionEntity.UpdateSessionExpireById(sessionId, config.AccessTokenTime)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 
@@ -131,7 +134,8 @@ func VerifyPassword(userEntity repository.IUser) gin.HandlerFunc {
 		userId := ctx.GetString(middlewares.UserId)
 		user, err := userEntity.GetUserById(userId)
 		if err != nil {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
 
