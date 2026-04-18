@@ -240,6 +240,11 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
+		if role == constant.ADMIN && req.Role != constant.USER {
+			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
+			return
+		}
+
 		id := ctx.Param("id")
 		user, err := getAccessibleUser(ctx, userEntity, id)
 		if err != nil {

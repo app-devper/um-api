@@ -1,8 +1,8 @@
 package request
 
 type GetSystems struct {
-	ClientId   string `json:"clientId"`
-	SystemCode string `json:"systemCode"`
+	ClientId   string `form:"clientId"`
+	SystemCode string `form:"systemCode"`
 }
 
 type System struct {

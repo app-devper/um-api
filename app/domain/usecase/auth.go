@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 	"um/app/core/config"
+	"um/app/core/constant"
 	"um/app/core/errs"
 	"um/app/core/utils"
 	"um/app/domain/repository"
@@ -45,6 +46,11 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession) gin.H
 			return
 		}
 
+		if user.Status != constant.ACTIVE {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
+			return
+		}
+
 		expireDate := time.Now().Add(config.AccessTokenTime)
 
 		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
@@ -82,6 +88,11 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 		if err != nil {
 			logrus.Error(err)
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+
+		if user.Status != constant.ACTIVE {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
 			return
 		}
 

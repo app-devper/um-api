@@ -26,7 +26,9 @@ func RateLimiter(rdb *redis.Client, maxAttempts int, window time.Duration) gin.H
 			return
 		}
 
-		rdb.Expire(context.Background(), key, window)
+		if count == 1 {
+			rdb.Expire(context.Background(), key, window)
+		}
 
 		if count > int64(maxAttempts) {
 			errs.Response(ctx, http.StatusTooManyRequests, errs.New(errs.ErrRateLimited, "too many requests, please try again later"))
