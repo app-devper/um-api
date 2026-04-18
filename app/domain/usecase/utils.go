@@ -1,13 +1,18 @@
 package usecase
 
 import (
+	"errors"
+	"net/http"
 	"um/app/core/constant"
 	"um/app/core/errs"
 	"um/app/domain/model"
+	"um/app/domain/repository"
 
 	"um/middlewares"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // clientIdForRole returns the clientId from context for non-SUPER roles,
@@ -34,4 +39,19 @@ func ValidateUserRole(role string, user *model.User) error {
 		return errs.New(errs.ErrInvalidRolePermission, "invalid role permission")
 	}
 	return nil
+}
+
+func getAccessibleUser(ctx *gin.Context, userEntity repository.IUser, id string) (*model.User, error) {
+	return userEntity.GetUserByClientId(id, clientIdForRole(ctx))
+}
+
+func respondRepositoryError(ctx *gin.Context, err error, resource string) {
+	switch {
+	case errors.Is(err, primitive.ErrInvalidHex):
+		errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, "invalid id"))
+	case errors.Is(err, mongo.ErrNoDocuments):
+		errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, resource+" not found"))
+	default:
+		errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+	}
 }

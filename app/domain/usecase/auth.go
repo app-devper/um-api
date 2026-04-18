@@ -24,6 +24,7 @@ func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
 		}
 		ctx.Set(middlewares.UserId, userId)
 		logrus.Info("UserId: " + userId)
+		ctx.Next()
 	}
 }
 

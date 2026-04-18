@@ -93,5 +93,7 @@ func RequireAuthenticated() gin.HandlerFunc {
 		logrus.Info("Role: " + claims.Role)
 		logrus.Info("System: " + claims.System)
 		logrus.Info("ClientId: " + claims.ClientId)
+
+		ctx.Next()
 	}
 }

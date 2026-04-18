@@ -22,6 +22,7 @@ func RateLimiter(rdb *redis.Client, maxAttempts int, window time.Duration) gin.H
 		count, err := rdb.Incr(context.Background(), key).Result()
 		if err != nil {
 			// fail-open: allow request if Redis is unavailable
+			ctx.Next()
 			return
 		}
 
@@ -31,5 +32,7 @@ func RateLimiter(rdb *redis.Client, maxAttempts int, window time.Duration) gin.H
 			errs.Response(ctx, http.StatusTooManyRequests, errs.New(errs.ErrRateLimited, "too many requests, please try again later"))
 			return
 		}
+
+		ctx.Next()
 	}
 }
