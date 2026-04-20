@@ -60,7 +60,8 @@ func (entity *userEntity) GetUsers() (items []model.User, err error) {
 	logrus.Info("GetUsers")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	cursor, err := entity.userRepo.Find(ctx, bson.M{})
+	sort := options.Find().SetSort(bson.D{{Key: "clientId", Value: 1}, {Key: "username", Value: 1}})
+	cursor, err := entity.userRepo.Find(ctx, bson.M{}, sort)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +86,8 @@ func (entity *userEntity) GetUserAll(clientId string) (items []model.User, err e
 	logrus.Info("GetUserAll")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	cursor, err := entity.userRepo.Find(ctx, bson.M{"clientId": clientId, "role": bson.M{"$ne": constant.SUPER}})
+	sort := options.Find().SetSort(bson.D{{Key: "clientId", Value: 1}, {Key: "username", Value: 1}})
+	cursor, err := entity.userRepo.Find(ctx, bson.M{"clientId": clientId, "role": bson.M{"$ne": constant.SUPER}}, sort)
 	if err != nil {
 		return nil, err
 	}
