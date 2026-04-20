@@ -352,7 +352,10 @@ paths:
     post:
       tags: [Auth]
       summary: Login
-      description: Authenticate with username and password. Returns a JWT access token.
+      description: |
+        Authenticate with username and password. Returns a JWT access token.
+
+        Brute-force protection: IP-based rate limit (5 requests per minute per path+IP) plus per-username account lockout — after 5 consecutive failed login attempts within 15 minutes the username is locked for 15 minutes and all subsequent logins for that username return `429 UM-429-001` until the lock expires or an admin calls `POST /user/{id}/unlock`.
       requestBody:
         required: true
         content:
@@ -470,6 +473,78 @@ paths:
                 $ref: "#/components/schemas/MessageResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /auth/sso-ticket:
+    post:
+      tags: [Auth]
+      summary: Create SSO handoff ticket
+      description: |
+        Issues a one-time, short-lived ticket (TTL 60 seconds, stored in Redis) that can be exchanged by another front-end for a fresh access token belonging to the same user.
+
+        Typical use: `dpharm.web.app` calls this, then redirects the browser to `https://devper-um.web.app/sso?ticket={ticket}&return=/profile` so the user lands on their UM profile page without re-logging in.
+
+        The ticket carries `{userId, role, clientId, system}` from the caller's current session. Exchange creates a brand-new session (different `sessionId`), so logging out on one front-end does not affect the other.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Ticket issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket:
+                    type: string
+                    example: "4e5a7c0e-2b8e-4a7e-b8a3-6c8b1c0d2e9f"
+                  expiresIn:
+                    type: integer
+                    example: 60
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /auth/exchange:
+    post:
+      tags: [Auth]
+      summary: Exchange SSO ticket for access token
+      description: |
+        Consumes a one-time SSO ticket issued by `POST /auth/sso-ticket` and returns a new access token. The ticket is deleted on first successful use (one-shot). IP-rate-limited to 10 requests/minute.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket]
+              properties:
+                ticket:
+                  type: string
+      responses:
+        "200":
+          description: Exchange successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Ticket invalid, expired, or already consumed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              example:
+                code: "UM-401-002"
+                message: "ticket invalid or expired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 
   # ── User (self-service) ───────────────────────────────
   /user/info:
@@ -831,6 +906,38 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /user/{id}/unlock:
+    post:
+      tags: [User]
+      summary: Unlock a locked user
+      description: Clears the brute-force lockout (fail counter + lock flag) for the target user. Admin/Super only; role hierarchy is enforced.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User ObjectID
+      responses:
+        "200":
+          description: User unlocked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: success
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   # ── System ────────────────────────────────────────────
   /system:

@@ -5,3 +5,7 @@ type Login struct {
 	Password string `json:"password" binding:"required"`
 	System   string `json:"system" binding:"required"`
 }
+
+type ExchangeTicket struct {
+	Ticket string `json:"ticket" binding:"required"`
+}

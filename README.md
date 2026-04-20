@@ -7,6 +7,8 @@ User management (UM) is defined as the effective management of users giving them
 - **CRUD API** — Full user and system management
 - **Authentication** — JWT-based with session management (Redis)
 - **Authorization** — Role-based access control (SUPER, ADMIN, USER)
+- **SSO handoff** — One-time ticket exchange so other front-ends (e.g. `dpharm.web.app`) can hand the user off to the UM profile page without re-login
+- **Brute-force protection** — IP rate limit on `/auth/login` (always on) + optional per-username account lockout after 5 consecutive failures for 15 minutes (opt-in via `LOGIN_LOCKOUT_ENABLED`, disabled by default)
 - **CORS** — Configurable cross-origin resource sharing
 - **Structured Error Handling** — Consistent error codes and messages across all endpoints
 
@@ -25,13 +27,15 @@ Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openap
 
 ### Auth (`/api/um/v1/auth`)
 
-| Method | Path               | Auth | Description            |
-|--------|--------------------|------|------------------------|
-| POST   | `/login`           | No   | Login and get token    |
-| GET    | `/keep-alive`      | Yes  | Refresh token          |
-| GET    | `/system`          | Yes  | Get current system     |
-| POST   | `/verify-password` | Yes  | Verify user password   |
-| POST   | `/logout`          | Yes  | Logout and end session |
+| Method | Path               | Auth | Description                                  |
+|--------|--------------------|------|----------------------------------------------|
+| POST   | `/login`           | No   | Login and get token                          |
+| GET    | `/keep-alive`      | Yes  | Refresh token                                |
+| GET    | `/system`          | Yes  | Get current system                           |
+| POST   | `/verify-password` | Yes  | Verify user password                         |
+| POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s)  |
+| POST   | `/exchange`        | No   | Exchange SSO ticket for a new access token   |
+| POST   | `/logout`          | Yes  | Logout and end session                       |
 
 ### User (`/api/um/v1/user`)
 
@@ -48,6 +52,7 @@ Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openap
 | PATCH  | `/:id/status`         | Yes  | SUPER, ADMIN  | Update user status   |
 | PATCH  | `/:id/role`           | Yes  | SUPER, ADMIN  | Update user role     |
 | PATCH  | `/:id/set-password`   | Yes  | SUPER, ADMIN  | Set user password    |
+| POST   | `/:id/unlock`         | Yes  | SUPER, ADMIN  | Unlock locked user   |
 
 ### System (`/api/um/v1/system`)
 
@@ -89,6 +94,13 @@ All error responses follow the format:
 | UM-500-001   | 500         | Internal server error    |
 | UM-500-002   | 500         | Token generation failed  |
 
+## Prerequisites
+
+- [Go](https://go.dev) 1.26 or newer
+- [MongoDB](https://www.mongodb.com) 5.0+ (local or remote)
+- [Redis](https://redis.io) 6.0+ (local or remote)
+- Optional: [nodemon](https://www.npmjs.com/package/nodemon) for live-reload during development
+
 ## Setup
 
 1. Create a `.env` file in the project root with the following variables:
@@ -100,6 +112,15 @@ MONGO_UM_DB_NAME=your_db_name
 REDIS_HOST=localhost:6379
 SECRET_KEY=your_secret_key
 ```
+
+| Variable                 | Description                                                                                     | Required | Default |
+|--------------------------|-------------------------------------------------------------------------------------------------|----------|---------|
+| `PORT`                   | HTTP port to listen on                                                                          | Yes      | —       |
+| `MONGO_HOST`             | MongoDB host:port (e.g. `localhost:27017`)                                                      | Yes      | —       |
+| `MONGO_UM_DB_NAME`       | MongoDB database name                                                                           | Yes      | —       |
+| `REDIS_HOST`             | Redis host:port                                                                                 | Yes      | —       |
+| `SECRET_KEY`             | Secret key used to sign JWT tokens                                                              | Yes      | —       |
+| `LOGIN_LOCKOUT_ENABLED`  | Turn on per-username account lockout (`1`/`true`/`yes`/`on` to enable, anything else disables). | No       | off     |
 
 > **Important:** `SECRET_KEY` must be set to a non-empty value. The application will refuse to sign or verify tokens without it.
 
@@ -114,6 +135,21 @@ go run main.go
 
 # Run with nodemon (auto-reload)
 nodemon --exec go run main.go --signal SIGTERM
+```
+
+The server listens on `http://localhost:<PORT>` (default `8585`). All endpoints are mounted under `/api/um/v1`.
+
+## Quick Test
+
+```bash
+# Login
+curl -X POST http://localhost:8585/api/um/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password","system":"UM"}'
+
+# Use the returned token
+curl http://localhost:8585/api/um/v1/user/info \
+  -H "Authorization: Bearer <accessToken>"
 ```
 
 ## Project Structure
@@ -140,3 +176,7 @@ um-api/
 ├── go.mod
 └── go.sum
 ```
+
+## Related
+
+- Web console: [`um-web`](../um-web) — Next.js 16 + shadcn/ui frontend that consumes this API

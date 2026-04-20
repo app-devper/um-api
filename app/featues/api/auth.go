@@ -15,6 +15,8 @@ func ApplyAuthAPI(
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
 	systemEntity repository.ISystem,
+	loginGuard repository.ILoginGuard,
+	ssoEntity repository.ISSOTicket,
 	rdb *redis.Client,
 ) {
 
@@ -22,7 +24,18 @@ func ApplyAuthAPI(
 
 	route.POST("/login",
 		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
-		usecase.Login(userEntity, sessionEntity),
+		usecase.Login(userEntity, sessionEntity, loginGuard),
+	)
+
+	route.POST("/sso-ticket",
+		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity),
+		usecase.CreateSSOTicket(ssoEntity, userEntity),
+	)
+
+	route.POST("/exchange",
+		middlewares.RateLimiter(rdb, 10, 1*time.Minute),
+		usecase.ExchangeSSOTicket(ssoEntity, userEntity, sessionEntity),
 	)
 
 	route.GET("/keep-alive",

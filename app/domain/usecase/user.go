@@ -39,7 +39,7 @@ func GetUserList(userEntity repository.IUser) gin.HandlerFunc {
 	}
 }
 
-func AddUserByRole(userEntity repository.IUser) gin.HandlerFunc {
+func AddUserByRole(userEntity repository.IUser, systemEntity repository.ISystem) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.User{}
 		err := ctx.ShouldBind(&req)
@@ -67,6 +67,17 @@ func AddUserByRole(userEntity repository.IUser) gin.HandlerFunc {
 			targetRole = constant.USER
 		default:
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
+			return
+		}
+
+		systems, err := systemEntity.GetSystemsByClientId(req.ClientId)
+		if err != nil {
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+		if len(systems) == 0 {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "invalid client id"))
 			return
 		}
 
@@ -107,6 +118,11 @@ func ChangePassword(userEntity repository.IUser) gin.HandlerFunc {
 
 		if user == nil || utils.ComparePasswordAndHashedPassword(req.OldPassword, user.Password) != nil {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrWrongPassword, "wrong password"))
+			return
+		}
+
+		if user.Status != constant.ACTIVE {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
 			return
 		}
 
@@ -286,9 +302,14 @@ func UpdateStatusById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		role := ctx.GetString(middlewares.Role)
-
 		id := ctx.Param("id")
+		userId := ctx.GetString(middlewares.UserId)
+		if userId == id {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrDeleteSelf, "can't change status of self user"))
+			return
+		}
+
+		role := ctx.GetString(middlewares.Role)
 		user, err := getAccessibleUser(ctx, userEntity, id)
 		if err != nil {
 			logrus.Error(err)
@@ -301,7 +322,6 @@ func UpdateStatusById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString(middlewares.UserId)
 		clientId := clientIdForRole(ctx)
 		req.UpdatedBy = userId
 		result, err := userEntity.UpdateStatusById(id, clientId, req)
@@ -334,6 +354,29 @@ func UpdateUserInfo(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 		ctx.JSON(http.StatusOK, result)
+	}
+}
+
+func UnlockUserById(userEntity repository.IUser, loginGuard repository.ILoginGuard) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		id := ctx.Param("id")
+		role := ctx.GetString(middlewares.Role)
+		user, err := getAccessibleUser(ctx, userEntity, id)
+		if err != nil {
+			logrus.Error(err)
+			respondRepositoryError(ctx, err, "user")
+			return
+		}
+		if err := ValidateUserRole(role, user); err != nil {
+			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
+			return
+		}
+		if err := loginGuard.Unlock(user.Username); err != nil {
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	}
 }
 

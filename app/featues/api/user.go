@@ -13,6 +13,8 @@ func ApplyUserAPI(
 	app *gin.RouterGroup,
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
+	systemEntity repository.ISystem,
+	loginGuard repository.ILoginGuard,
 ) {
 
 	route := app.Group("/user")
@@ -48,7 +50,7 @@ func ApplyUserAPI(
 		middlewares.RequireAuthenticated(),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
 		usecase.RequireSession(sessionEntity),
-		usecase.AddUserByRole(userEntity),
+		usecase.AddUserByRole(userEntity, systemEntity),
 	)
 
 	route.GET("/:id",
@@ -91,5 +93,12 @@ func ApplyUserAPI(
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
 		usecase.RequireSession(sessionEntity),
 		usecase.SetPassword(userEntity),
+	)
+
+	route.POST("/:id/unlock",
+		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
+		usecase.RequireSession(sessionEntity),
+		usecase.UnlockUserById(userEntity, loginGuard),
 	)
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"um/app/core/config"
 	"um/app/domain/repository"
 	"um/app/featues/api"
 	"um/db"
@@ -37,9 +38,11 @@ func (app Routes) StartGin() {
 	userEntity := repository.NewUserEntity(resource)
 	sessionEntity := repository.NewSessionEntity(resource)
 	systemEntity := repository.NewSystemEntity(resource)
+	loginGuard := repository.NewLoginGuardEntity(resource, config.LoginLockoutEnabled())
+	ssoEntity := repository.NewSSOTicketEntity(resource)
 
-	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity, resource.RdDB)
-	api.ApplyUserAPI(publicRoute, userEntity, sessionEntity)
+	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
+	api.ApplyUserAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard)
 	api.ApplySystemAPI(publicRoute, systemEntity, sessionEntity)
 
 	r.NoRoute(middlewares.NoRoute())

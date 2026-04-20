@@ -123,6 +123,11 @@ func (entity *userEntity) CreateUser(form request.User, role string) (*model.Use
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 
+	hashed, err := utils.HashPassword(form.Password)
+	if err != nil {
+		return nil, err
+	}
+
 	userId := primitive.NewObjectID()
 	createdBy := userId
 	if form.CreatedBy != "" {
@@ -134,7 +139,7 @@ func (entity *userEntity) CreateUser(form request.User, role string) (*model.Use
 		LastName:    form.LastName,
 		Username:    form.Username,
 		ClientId:    form.ClientId,
-		Password:    utils.HashPassword(form.Password),
+		Password:    hashed,
 		Role:        role,
 		Status:      constant.ACTIVE,
 		CreatedBy:   createdBy,
@@ -142,7 +147,7 @@ func (entity *userEntity) CreateUser(form request.User, role string) (*model.Use
 		UpdatedBy:   createdBy,
 		UpdatedDate: time.Now(),
 	}
-	_, err := entity.userRepo.InsertOne(ctx, user)
+	_, err = entity.userRepo.InsertOne(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -217,31 +222,28 @@ func (entity *userEntity) UpdateUserById(id string, clientId string, form reques
 	if err != nil {
 		return nil, err
 	}
-	user, err := entity.GetUserById(id)
-	if err != nil {
-		return nil, err
-	}
+	updatedBy, _ := primitive.ObjectIDFromHex(form.UpdatedBy)
 
-	user.FirstName = form.FirstName
-	user.LastName = form.LastName
-	user.Email = form.Email
-	user.Phone = form.Phone
-	user.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
-	user.UpdatedDate = time.Now()
-
-	isReturnNewDoc := options.After
-	opts := &options.FindOneAndUpdateOptions{
-		ReturnDocument: &isReturnNewDoc,
+	set := bson.M{
+		"firstName":   form.FirstName,
+		"lastName":    form.LastName,
+		"email":       form.Email,
+		"phone":       form.Phone,
+		"updatedBy":   updatedBy,
+		"updatedDate": time.Now(),
 	}
 	filter := bson.M{"_id": objId}
 	if clientId != "" {
 		filter["clientId"] = clientId
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
+	isReturnNewDoc := options.After
+	opts := &options.FindOneAndUpdateOptions{ReturnDocument: &isReturnNewDoc}
+	user := model.User{}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": set}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return &user, nil
 }
 
 func (entity *userEntity) UpdateStatusById(id string, clientId string, form request.UpdateStatus) (*model.User, error) {
@@ -252,27 +254,25 @@ func (entity *userEntity) UpdateStatusById(id string, clientId string, form requ
 	if err != nil {
 		return nil, err
 	}
-	user, err := entity.GetUserById(id)
-	if err != nil {
-		return nil, err
-	}
-	user.Status = form.Status
-	user.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
-	user.UpdatedDate = time.Now()
+	updatedBy, _ := primitive.ObjectIDFromHex(form.UpdatedBy)
 
-	isReturnNewDoc := options.After
-	opts := &options.FindOneAndUpdateOptions{
-		ReturnDocument: &isReturnNewDoc,
+	set := bson.M{
+		"status":      form.Status,
+		"updatedBy":   updatedBy,
+		"updatedDate": time.Now(),
 	}
 	filter := bson.M{"_id": objId}
 	if clientId != "" {
 		filter["clientId"] = clientId
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
+	isReturnNewDoc := options.After
+	opts := &options.FindOneAndUpdateOptions{ReturnDocument: &isReturnNewDoc}
+	user := model.User{}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": set}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return &user, nil
 }
 
 func (entity *userEntity) UpdateRoleById(id string, clientId string, form request.UpdateRole) (*model.User, error) {
@@ -283,28 +283,25 @@ func (entity *userEntity) UpdateRoleById(id string, clientId string, form reques
 	if err != nil {
 		return nil, err
 	}
-	user, err := entity.GetUserById(id)
-	if err != nil {
-		return nil, err
-	}
+	updatedBy, _ := primitive.ObjectIDFromHex(form.UpdatedBy)
 
-	user.Role = form.Role
-	user.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
-	user.UpdatedDate = time.Now()
-
-	isReturnNewDoc := options.After
-	opts := &options.FindOneAndUpdateOptions{
-		ReturnDocument: &isReturnNewDoc,
+	set := bson.M{
+		"role":        form.Role,
+		"updatedBy":   updatedBy,
+		"updatedDate": time.Now(),
 	}
 	filter := bson.M{"_id": objId}
 	if clientId != "" {
 		filter["clientId"] = clientId
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
+	isReturnNewDoc := options.After
+	opts := &options.FindOneAndUpdateOptions{ReturnDocument: &isReturnNewDoc}
+	user := model.User{}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": set}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return &user, nil
 }
 
 func (entity *userEntity) ChangePassword(id string, clientId string, form request.ChangePassword) (*model.User, error) {
@@ -315,26 +312,28 @@ func (entity *userEntity) ChangePassword(id string, clientId string, form reques
 	if err != nil {
 		return nil, err
 	}
-	user, err := entity.GetUserById(id)
+	hashed, err := utils.HashPassword(form.NewPassword)
 	if err != nil {
 		return nil, err
 	}
-	user.Password = utils.HashPassword(form.NewPassword)
-	user.UpdatedBy = objId
-	user.UpdatedDate = time.Now()
-	isReturnNewDoc := options.After
-	opts := &options.FindOneAndUpdateOptions{
-		ReturnDocument: &isReturnNewDoc,
+
+	set := bson.M{
+		"password":    hashed,
+		"updatedBy":   objId,
+		"updatedDate": time.Now(),
 	}
 	filter := bson.M{"_id": objId}
 	if clientId != "" {
 		filter["clientId"] = clientId
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
+	isReturnNewDoc := options.After
+	opts := &options.FindOneAndUpdateOptions{ReturnDocument: &isReturnNewDoc}
+	user := model.User{}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": set}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return &user, nil
 }
 
 func (entity *userEntity) SetPassword(id string, clientId string, form request.SetPassword) (*model.User, error) {
@@ -345,24 +344,27 @@ func (entity *userEntity) SetPassword(id string, clientId string, form request.S
 	if err != nil {
 		return nil, err
 	}
-	user, err := entity.GetUserById(id)
+	updatedBy, _ := primitive.ObjectIDFromHex(form.UpdatedBy)
+	hashed, err := utils.HashPassword(form.Password)
 	if err != nil {
 		return nil, err
 	}
-	user.Password = utils.HashPassword(form.Password)
-	user.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
-	user.UpdatedDate = time.Now()
-	isReturnNewDoc := options.After
-	opts := &options.FindOneAndUpdateOptions{
-		ReturnDocument: &isReturnNewDoc,
+
+	set := bson.M{
+		"password":    hashed,
+		"updatedBy":   updatedBy,
+		"updatedDate": time.Now(),
 	}
 	filter := bson.M{"_id": objId}
 	if clientId != "" {
 		filter["clientId"] = clientId
 	}
-	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": user}, opts).Decode(&user)
+	isReturnNewDoc := options.After
+	opts := &options.FindOneAndUpdateOptions{ReturnDocument: &isReturnNewDoc}
+	user := model.User{}
+	err = entity.userRepo.FindOneAndUpdate(ctx, filter, bson.M{"$set": set}, opts).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
-	return user, nil
+	return &user, nil
 }
