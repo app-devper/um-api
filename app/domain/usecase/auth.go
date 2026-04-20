@@ -66,7 +66,11 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession, login
 
 		expireDate := time.Now().Add(config.AccessTokenTime)
 
-		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
+		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime, repository.SessionMetadata{
+			UserAgent: ctx.Request.UserAgent(),
+			IPAddress: ctx.ClientIP(),
+			System:    req.System,
+		})
 		if err != nil {
 			logrus.Error(err)
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
@@ -210,7 +214,11 @@ func ExchangeSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IU
 		}
 
 		expireDate := time.Now().Add(config.AccessTokenTime)
-		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime)
+		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime, repository.SessionMetadata{
+			UserAgent: ctx.Request.UserAgent(),
+			IPAddress: ctx.ClientIP(),
+			System:    payload.System,
+		})
 		if err != nil {
 			logrus.Error(err)
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
@@ -230,6 +238,64 @@ func ExchangeSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IU
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"accessToken": token})
+	}
+}
+
+func ListSessions(sessionEntity repository.ISession) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userId := ctx.GetString(middlewares.UserId)
+		currentSessionId := ctx.GetString(middlewares.SessionId)
+		items, err := sessionEntity.ListUserSessions(userId, currentSessionId)
+		if err != nil {
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+		ctx.JSON(http.StatusOK, items)
+	}
+}
+
+func RevokeSession(sessionEntity repository.ISession) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		targetId := ctx.Param("id")
+		userId := ctx.GetString(middlewares.UserId)
+		currentSessionId := ctx.GetString(middlewares.SessionId)
+
+		if targetId == currentSessionId {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, "cannot revoke current session, use logout instead"))
+			return
+		}
+
+		targetUserId, err := sessionEntity.GetSessionById(targetId)
+		if err != nil {
+			errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, "session not found"))
+			return
+		}
+		if targetUserId != userId {
+			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
+			return
+		}
+
+		if err := sessionEntity.RemoveSessionById(targetId); err != nil {
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
+	}
+}
+
+func RevokeOtherSessions(sessionEntity repository.ISession) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		userId := ctx.GetString(middlewares.UserId)
+		currentSessionId := ctx.GetString(middlewares.SessionId)
+		count, err := sessionEntity.RevokeOtherSessions(userId, currentSessionId)
+		if err != nil {
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+		ctx.JSON(http.StatusOK, gin.H{"message": "success", "revoked": count})
 	}
 }
 

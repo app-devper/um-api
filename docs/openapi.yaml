@@ -100,6 +100,29 @@ components:
           type: string
           example: "success"
 
+    Session:
+      type: object
+      properties:
+        sessionId:
+          type: string
+          description: Session UUID
+        createdAt:
+          type: string
+          format: date-time
+        lastActivity:
+          type: string
+          format: date-time
+        userAgent:
+          type: string
+        ipAddress:
+          type: string
+        system:
+          type: string
+          description: System code claim from the session's JWT
+        current:
+          type: boolean
+          description: True if this is the caller's own session
+
     User:
       type: object
       properties:
@@ -456,6 +479,89 @@ paths:
                 message: "wrong password"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /auth/sessions:
+    get:
+      tags: [Auth]
+      summary: List own active sessions
+      description: Returns every active session belonging to the current user, including device metadata and a `current` flag marking the caller's own session.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Sessions listed
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+    delete:
+      tags: [Auth]
+      summary: Sign out everywhere else
+      description: Revokes every session belonging to the current user except the caller's own. Returns the number of revoked sessions.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: success
+                  revoked:
+                    type: integer
+                    example: 2
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+
+  /auth/sessions/{id}:
+    delete:
+      tags: [Auth]
+      summary: Revoke a specific session
+      description: |
+        Revokes a single session belonging to the current user. Cannot revoke the caller's own session — use `POST /auth/logout` instead.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Session ID (UUID)
+      responses:
+        "200":
+          description: Revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          description: Cannot revoke the current session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              example:
+                code: "UM-400-001"
+                message: "cannot revoke current session, use logout instead"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /auth/logout:
     post:

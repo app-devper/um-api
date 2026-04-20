@@ -61,4 +61,22 @@ func ApplyAuthAPI(
 		usecase.RequireSession(sessionEntity),
 		usecase.Logout(sessionEntity),
 	)
+
+	route.GET("/sessions",
+		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity),
+		usecase.ListSessions(sessionEntity),
+	)
+
+	route.DELETE("/sessions",
+		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity),
+		usecase.RevokeOtherSessions(sessionEntity),
+	)
+
+	route.DELETE("/sessions/:id",
+		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity),
+		usecase.RevokeSession(sessionEntity),
+	)
 }

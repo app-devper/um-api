@@ -8,6 +8,7 @@ User management (UM) is defined as the effective management of users giving them
 - **Authentication** — JWT-based with session management (Redis)
 - **Authorization** — Role-based access control (SUPER, ADMIN, USER)
 - **SSO handoff** — One-time ticket exchange so other front-ends (e.g. `dpharm.web.app`) can hand the user off to the UM profile page without re-login
+- **Session management** — List own active sessions with device / IP / system metadata and force-logout other devices
 - **Brute-force protection** — IP rate limit on `/auth/login` (always on) + optional per-username account lockout after 5 consecutive failures for 15 minutes (opt-in via `LOGIN_LOCKOUT_ENABLED`, disabled by default)
 - **CORS** — Configurable cross-origin resource sharing
 - **Structured Error Handling** — Consistent error codes and messages across all endpoints
@@ -27,14 +28,17 @@ Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openap
 
 ### Auth (`/api/um/v1/auth`)
 
-| Method | Path               | Auth | Description                                  |
-|--------|--------------------|------|----------------------------------------------|
-| POST   | `/login`           | No   | Login and get token                          |
-| GET    | `/keep-alive`      | Yes  | Refresh token                                |
-| GET    | `/system`          | Yes  | Get current system                           |
-| POST   | `/verify-password` | Yes  | Verify user password                         |
-| POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s)  |
-| POST   | `/exchange`        | No   | Exchange SSO ticket for a new access token   |
+| Method | Path               | Auth | Description                                   |
+|--------|--------------------|------|-----------------------------------------------|
+| POST   | `/login`           | No   | Login and get token                           |
+| GET    | `/keep-alive`      | Yes  | Refresh token                                 |
+| GET    | `/system`          | Yes  | Get current system                            |
+| POST   | `/verify-password` | Yes  | Verify user password                          |
+| POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s)   |
+| POST   | `/exchange`        | No   | Exchange SSO ticket for a new access token    |
+| GET    | `/sessions`        | Yes  | List own active sessions (all devices)        |
+| DELETE | `/sessions`        | Yes  | Sign out everywhere else (keep current)       |
+| DELETE | `/sessions/:id`    | Yes  | Revoke a specific own session                 |
 | POST   | `/logout`          | Yes  | Logout and end session                       |
 
 ### User (`/api/um/v1/user`)
@@ -91,6 +95,7 @@ All error responses follow the format:
 | UM-403-003   | 403         | Invalid role permission  |
 | UM-409-001   | 409         | Username taken           |
 | UM-404-001   | 404         | Not found                |
+| UM-429-001   | 429         | Rate limited / locked    |
 | UM-500-001   | 500         | Internal server error    |
 | UM-500-002   | 500         | Token generation failed  |
 
@@ -151,6 +156,23 @@ curl -X POST http://localhost:8585/api/um/v1/auth/login \
 curl http://localhost:8585/api/um/v1/user/info \
   -H "Authorization: Bearer <accessToken>"
 ```
+
+## SSO Handoff
+
+Other front-ends that already authenticate against this API (e.g. `dpharm.web.app`) can send their user to the UM profile page without re-login:
+
+```bash
+# 1. From the already-logged-in front-end, request a one-time ticket (TTL 60s)
+curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
+  -H "Authorization: Bearer <current_access_token>"
+# → { "ticket": "<uuid>", "expiresIn": 60 }
+
+# 2. Redirect the browser to um-web's /sso handler, which will exchange the
+#    ticket for a fresh access token and drop the user on /profile
+window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}&return=/profile`;
+```
+
+Tickets are one-shot — `POST /auth/exchange` deletes them on first use and returns `UM-401-002` on replay or after the 60-second TTL expires.
 
 ## Project Structure
 
