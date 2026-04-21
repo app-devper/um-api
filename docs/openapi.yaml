@@ -140,7 +140,7 @@ components:
           type: string
         role:
           type: string
-          enum: [SUPER, ADMIN, USER]
+          enum: [SUPER, ADMIN, MANAGER, USER]
         status:
           type: string
           enum: [ACTIVE, INACTIVE]
@@ -180,9 +180,16 @@ components:
           minLength: 8
         clientId:
           type: string
-          description: Must be exactly 3 characters
+          description: Must be exactly 3 characters. SUPER role is restricted to `000`.
           minLength: 3
           maxLength: 3
+        role:
+          type: string
+          enum: [SUPER, ADMIN, MANAGER, USER]
+          description: |
+            Target role for the new user. Optional — if omitted, defaults to ADMIN when the caller is SUPER and USER when the caller is ADMIN (backward-compatible behaviour).
+            - caller=SUPER may assign SUPER (requires `clientId=000`), ADMIN, MANAGER, or USER
+            - caller=ADMIN may assign MANAGER or USER (target must share caller's clientId)
       required:
         - username
         - password
@@ -232,7 +239,7 @@ components:
       properties:
         role:
           type: string
-          enum: [SUPER, ADMIN, USER]
+          enum: [SUPER, ADMIN, MANAGER, USER]
       required:
         - role
 

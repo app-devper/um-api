@@ -22,7 +22,7 @@ func GetUserList(userEntity repository.IUser) gin.HandlerFunc {
 		switch role {
 		case constant.SUPER:
 			result, err = userEntity.GetUsers()
-		case constant.ADMIN:
+		case constant.ADMIN, constant.MANAGER:
 			clientId := ctx.GetString(middlewares.ClientId)
 			result, err = userEntity.GetUserAll(clientId)
 		default:
@@ -49,7 +49,11 @@ func AddUserByRole(userEntity repository.IUser, systemEntity repository.ISystem)
 		}
 
 		role := ctx.GetString(middlewares.Role)
-		var targetRole string
+		targetRole, err := resolveCreateTargetRole(role, req.Role)
+		if err != nil {
+			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, err.Error()))
+			return
+		}
 
 		switch role {
 		case constant.SUPER:
@@ -57,28 +61,33 @@ func AddUserByRole(userEntity repository.IUser, systemEntity repository.ISystem)
 				errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "invalid client id"))
 				return
 			}
-			targetRole = constant.ADMIN
+			if targetRole == constant.SUPER && req.ClientId != constant.SuperClientId {
+				errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "SUPER must have clientId "+constant.SuperClientId))
+				return
+			}
 		case constant.ADMIN:
 			clientId := ctx.GetString(middlewares.ClientId)
 			if len(req.ClientId) != 3 || req.ClientId != clientId {
 				errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "invalid client id"))
 				return
 			}
-			targetRole = constant.USER
 		default:
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
 			return
 		}
 
-		systems, err := systemEntity.GetSystemsByClientId(req.ClientId)
-		if err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
-			return
-		}
-		if len(systems) == 0 {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "invalid client id"))
-			return
+		// Bootstrap exception: SUPER in clientId=000 doesn't require an existing system
+		if !(targetRole == constant.SUPER && req.ClientId == constant.SuperClientId) {
+			systems, err := systemEntity.GetSystemsByClientId(req.ClientId)
+			if err != nil {
+				logrus.Error(err)
+				errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+				return
+			}
+			if len(systems) == 0 {
+				errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "invalid client id"))
+				return
+			}
 		}
 
 		userId := ctx.GetString(middlewares.UserId)
@@ -245,7 +254,7 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		if req.Role != constant.SUPER && req.Role != constant.ADMIN && req.Role != constant.USER {
+		if req.Role != constant.SUPER && req.Role != constant.ADMIN && req.Role != constant.MANAGER && req.Role != constant.USER {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidRole, "invalid role"))
 			return
 		}
@@ -256,7 +265,7 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		if role == constant.ADMIN && req.Role != constant.USER {
+		if role == constant.ADMIN && req.Role != constant.MANAGER && req.Role != constant.USER {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
 			return
 		}
@@ -272,6 +281,11 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 		err = ValidateUserRole(role, user)
 		if err != nil {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
+			return
+		}
+
+		if req.Role == constant.SUPER && user.ClientId != constant.SuperClientId {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrInvalidClientId, "SUPER must have clientId "+constant.SuperClientId))
 			return
 		}
 

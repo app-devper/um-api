@@ -6,7 +6,7 @@ User management (UM) is defined as the effective management of users giving them
 
 - **CRUD API** — Full user and system management
 - **Authentication** — JWT-based with session management (Redis)
-- **Authorization** — Role-based access control (SUPER, ADMIN, USER)
+- **Authorization** — Role-based access control (`SUPER` / `ADMIN` / `MANAGER` / `USER`). `SUPER` is reserved for `clientId=000` and must be bootstrapped outside the UI.
 - **SSO handoff** — One-time ticket exchange so other front-ends (e.g. `dpharm.web.app`) can hand the user off to the UM profile page without re-login
 - **Session management** — List own active sessions with device / IP / system metadata and force-logout other devices
 - **Brute-force protection** — IP rate limit on `/auth/login` (always on) + optional per-username account lockout after 5 consecutive failures for 15 minutes (opt-in via `LOGIN_LOCKOUT_ENABLED`, disabled by default)
@@ -43,20 +43,29 @@ Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openap
 
 ### User (`/api/um/v1/user`)
 
-| Method | Path                  | Auth | Role          | Description          |
-|--------|-----------------------|------|---------------|----------------------|
-| GET    | `/info`               | Yes  | Any           | Get own user info    |
-| PUT    | `/info`               | Yes  | Any           | Update own user info |
-| PUT    | `/change-password`    | Yes  | Any           | Change own password  |
-| GET    | `/`                   | Yes  | SUPER, ADMIN  | List users           |
-| POST   | `/`                   | Yes  | SUPER, ADMIN  | Create user          |
-| GET    | `/:id`                | Yes  | SUPER, ADMIN  | Get user by ID       |
-| DELETE | `/:id`                | Yes  | SUPER, ADMIN  | Delete user          |
-| PUT    | `/:id`                | Yes  | SUPER, ADMIN  | Update user          |
-| PATCH  | `/:id/status`         | Yes  | SUPER, ADMIN  | Update user status   |
-| PATCH  | `/:id/role`           | Yes  | SUPER, ADMIN  | Update user role     |
-| PATCH  | `/:id/set-password`   | Yes  | SUPER, ADMIN  | Set user password    |
-| POST   | `/:id/unlock`         | Yes  | SUPER, ADMIN  | Unlock locked user   |
+| Method | Path                  | Auth | Role                   | Description          |
+|--------|-----------------------|------|------------------------|----------------------|
+| GET    | `/info`               | Yes  | Any                    | Get own user info    |
+| PUT    | `/info`               | Yes  | Any                    | Update own user info |
+| PUT    | `/change-password`    | Yes  | Any                    | Change own password  |
+| GET    | `/`                   | Yes  | SUPER, ADMIN, MANAGER  | List users           |
+| POST   | `/`                   | Yes  | SUPER, ADMIN           | Create user          |
+| GET    | `/:id`                | Yes  | SUPER, ADMIN, MANAGER  | Get user by ID       |
+| DELETE | `/:id`                | Yes  | SUPER, ADMIN           | Delete user          |
+| PUT    | `/:id`                | Yes  | SUPER, ADMIN           | Update user          |
+| PATCH  | `/:id/status`         | Yes  | SUPER, ADMIN           | Update user status   |
+| PATCH  | `/:id/role`           | Yes  | SUPER, ADMIN           | Update user role     |
+| PATCH  | `/:id/set-password`   | Yes  | SUPER, ADMIN           | Set user password    |
+| POST   | `/:id/unlock`         | Yes  | SUPER, ADMIN           | Unlock locked user   |
+
+#### Role hierarchy
+
+| Caller   | Can create targets | Can change role to       | Notes                                    |
+|----------|--------------------|--------------------------|------------------------------------------|
+| SUPER    | ADMIN, MANAGER, USER (any `clientId`); SUPER only when `clientId=000` | ADMIN, MANAGER, USER, SUPER (target must be in `000`) | SUPER is hidden from UI dropdowns        |
+| ADMIN    | MANAGER, USER (must share `clientId`) | MANAGER, USER           | Cannot touch other ADMINs or SUPERs      |
+| MANAGER  | —                  | —                        | Read-only: list + get user in own tenant |
+| USER     | —                  | —                        | Self-service only                        |
 
 ### System (`/api/um/v1/system`)
 

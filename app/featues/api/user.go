@@ -41,7 +41,7 @@ func ApplyUserAPI(
 	// Management (SUPER + ADMIN)
 	route.GET("",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
+		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN, constant.MANAGER),
 		usecase.RequireSession(sessionEntity),
 		usecase.GetUserList(userEntity),
 	)
@@ -55,7 +55,7 @@ func ApplyUserAPI(
 
 	route.GET("/:id",
 		middlewares.RequireAuthenticated(),
-		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
+		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN, constant.MANAGER),
 		usecase.RequireSession(sessionEntity),
 		usecase.GetUserById(userEntity),
 	)

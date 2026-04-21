@@ -8,6 +8,7 @@ type User struct {
 	Username  string `json:"username" binding:"required,min=3,max=50"`
 	Password  string `json:"password" binding:"required,min=8"`
 	ClientId  string `json:"clientId" binding:"required,len=3"`
+	Role      string `json:"role"`
 	CreatedBy string
 }
 
