@@ -3,6 +3,7 @@ package utils
 import (
 	"context"
 	"crypto/rand"
+	"strings"
 	"time"
 )
 
@@ -37,4 +38,8 @@ func GenerateRefId(length int) string {
 		buffer[i] = alphabet[int(buffer[i])%otpCharsLength]
 	}
 	return string(buffer)
+}
+
+func NormalizeUsername(username string) string {
+	return strings.TrimSpace(username)
 }

@@ -1,7 +1,6 @@
 package repository
 
 import (
-	"strings"
 	"time"
 	"um/app/core/constant"
 	"um/app/core/utils"
@@ -113,7 +112,7 @@ func (entity *userEntity) GetUserByUsername(username string) (*model.User, error
 	ctx, cancel := utils.InitContext()
 	defer cancel()
 	user := model.User{}
-	err := entity.userRepo.FindOne(ctx, bson.M{"username": strings.TrimSpace(username)}).Decode(&user)
+	err := entity.userRepo.FindOne(ctx, bson.M{"username": utils.NormalizeUsername(username)}).Decode(&user)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +138,7 @@ func (entity *userEntity) CreateUser(form request.User, role string) (*model.Use
 		Id:          userId,
 		FirstName:   form.FirstName,
 		LastName:    form.LastName,
-		Username:    form.Username,
+		Username:    utils.NormalizeUsername(form.Username),
 		ClientId:    form.ClientId,
 		Password:    hashed,
 		Role:        role,

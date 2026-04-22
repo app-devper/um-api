@@ -24,7 +24,7 @@ func ApplyAuthAPI(
 
 	route.POST("/login",
 		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
-		usecase.Login(userEntity, sessionEntity, loginGuard),
+		usecase.Login(userEntity, sessionEntity, systemEntity, loginGuard),
 	)
 
 	route.POST("/sso-ticket",

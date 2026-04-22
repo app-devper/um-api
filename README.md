@@ -129,14 +129,26 @@ SECRET_KEY=your_secret_key
 
 | Variable                 | Description                                                                                     | Required | Default |
 |--------------------------|-------------------------------------------------------------------------------------------------|----------|---------|
-| `PORT`                   | HTTP port to listen on                                                                          | Yes      | —       |
-| `MONGO_HOST`             | MongoDB host:port (e.g. `localhost:27017`)                                                      | Yes      | —       |
+| `PORT`                   | HTTP port to listen on. Must be a valid TCP port (`1-65535`)                                    | Yes      | —       |
+| `MONGO_HOST`             | MongoDB connection target. Supported formats: `host:port`, `mongodb://...`, `mongodb+srv://...` | Yes      | —       |
 | `MONGO_UM_DB_NAME`       | MongoDB database name                                                                           | Yes      | —       |
-| `REDIS_HOST`             | Redis host:port                                                                                 | Yes      | —       |
+| `REDIS_HOST`             | Redis connection target. Supported formats: `host:port`, `redis://...`, `rediss://...`         | Yes      | —       |
 | `SECRET_KEY`             | Secret key used to sign JWT tokens                                                              | Yes      | —       |
 | `LOGIN_LOCKOUT_ENABLED`  | Turn on per-username account lockout (`1`/`true`/`yes`/`on` to enable, anything else disables). | No       | off     |
 
-> **Important:** `SECRET_KEY` must be set to a non-empty value. The application will refuse to sign or verify tokens without it.
+> **Important:** The application validates required startup config before opening database connections or starting the HTTP server. Missing or malformed `PORT`, `MONGO_HOST`, `MONGO_UM_DB_NAME`, `REDIS_HOST`, or `SECRET_KEY` will cause startup to fail fast.
+
+Examples:
+
+```env
+# Local host:port style
+MONGO_HOST=localhost:27017
+REDIS_HOST=localhost:6379
+
+# URL style
+MONGO_HOST=mongodb://localhost:27017
+REDIS_HOST=redis://localhost:6379/0
+```
 
 ## Run
 
@@ -152,6 +164,11 @@ nodemon --exec go run main.go --signal SIGTERM
 ```
 
 The server listens on `http://localhost:<PORT>` (default `8585`). All endpoints are mounted under `/api/um/v1`.
+
+Login behavior notes:
+
+- `/auth/login` validates that the requested `system` exists for the user's tenant before issuing a token.
+- Disabled accounts still return `401`, and failed attempts participate in login lockout when `LOGIN_LOCKOUT_ENABLED` is enabled.
 
 ## Quick Test
 

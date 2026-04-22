@@ -29,7 +29,7 @@ func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
 	}
 }
 
-func Login(userEntity repository.IUser, sessionEntity repository.ISession, loginGuard repository.ILoginGuard) gin.HandlerFunc {
+func Login(userEntity repository.IUser, sessionEntity repository.ISession, systemEntity repository.ISystem, loginGuard repository.ILoginGuard) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.Login{}
 		if err := ctx.ShouldBind(&req); err != nil {
@@ -37,7 +37,8 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession, login
 			return
 		}
 
-		locked, err := loginGuard.IsLocked(req.Username)
+		username := utils.NormalizeUsername(req.Username)
+		locked, err := loginGuard.IsLocked(username)
 		if err != nil {
 			logrus.Warn("loginGuard IsLocked error: ", err)
 		} else if locked {
@@ -45,24 +46,32 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession, login
 			return
 		}
 
-		user, err := userEntity.GetUserByUsername(req.Username)
+		user, err := userEntity.GetUserByUsername(username)
 		if err != nil || user == nil {
-			_ = loginGuard.RecordFailure(req.Username)
+			_ = loginGuard.RecordFailure(username)
 			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
 			return
 		}
 		if utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
-			_ = loginGuard.RecordFailure(req.Username)
+			_ = loginGuard.RecordFailure(username)
 			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
 			return
 		}
 
 		if user.Status != constant.ACTIVE {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
+			_ = loginGuard.RecordFailure(username)
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "account is not active"))
 			return
 		}
 
-		_ = loginGuard.Reset(req.Username)
+		system, err := systemEntity.GetSystem(user.ClientId, req.System)
+		if err != nil || system == nil {
+			_ = loginGuard.RecordFailure(username)
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "invalid client or system"))
+			return
+		}
+
+		_ = loginGuard.Reset(username)
 
 		expireDate := time.Now().Add(config.AccessTokenTime)
 
@@ -86,6 +95,9 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession, login
 		}
 		token, err := middlewares.GenerateJwtToken(param)
 		if err != nil {
+			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
+				logrus.Error(removeErr)
+			}
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
 			return
 		}
@@ -131,6 +143,9 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 		}
 		token, err := middlewares.GenerateJwtToken(param)
 		if err != nil {
+			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
+				logrus.Error(removeErr)
+			}
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
 			return
 		}
@@ -234,6 +249,9 @@ func ExchangeSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IU
 		}
 		token, err := middlewares.GenerateJwtToken(param)
 		if err != nil {
+			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
+				logrus.Error(removeErr)
+			}
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
 			return
 		}

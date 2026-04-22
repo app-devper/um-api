@@ -1,7 +1,6 @@
 package app
 
 import (
-	"os"
 	"um/app/core/config"
 	"um/app/domain/repository"
 	"um/app/featues/api"
@@ -27,9 +26,14 @@ func (app Routes) StartGin() {
 	r.Use(middlewares.NewRecovery())
 	r.Use(middlewares.NewCors([]string{"*"}))
 
-	resource, err := db.InitResource()
+	cfg, err := config.LoadAppConfig()
 	if err != nil {
-		logrus.Error(err)
+		logrus.Fatal(err)
+	}
+
+	resource, err := db.InitResource(cfg)
+	if err != nil {
+		logrus.Fatal(err)
 	}
 	defer resource.Close()
 
@@ -38,7 +42,7 @@ func (app Routes) StartGin() {
 	userEntity := repository.NewUserEntity(resource)
 	sessionEntity := repository.NewSessionEntity(resource)
 	systemEntity := repository.NewSystemEntity(resource)
-	loginGuard := repository.NewLoginGuardEntity(resource, config.LoginLockoutEnabled())
+	loginGuard := repository.NewLoginGuardEntity(resource, cfg.LockoutEnabled)
 	ssoEntity := repository.NewSSOTicketEntity(resource)
 
 	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
@@ -47,7 +51,7 @@ func (app Routes) StartGin() {
 
 	r.NoRoute(middlewares.NoRoute())
 
-	err = r.Run(":" + os.Getenv("PORT"))
+	err = r.Run(cfg.ListenAddr())
 	if err != nil {
 		logrus.Error(err)
 	}
