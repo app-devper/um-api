@@ -15,7 +15,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
+func RequireSession(sessionEntity repository.ISession, userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		sessionId := ctx.GetString(middlewares.SessionId)
 		userId, err := sessionEntity.GetSessionById(sessionId)
@@ -23,7 +23,18 @@ func RequireSession(sessionEntity repository.ISession) gin.HandlerFunc {
 			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrSessionInvalid, "session invalid"))
 			return
 		}
+		user, err := userEntity.GetUserById(userId)
+		if err != nil || user == nil {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrSessionInvalid, "session invalid"))
+			return
+		}
+		if user.Status != constant.ACTIVE {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
+			return
+		}
 		ctx.Set(middlewares.UserId, userId)
+		ctx.Set(middlewares.Role, user.Role)
+		ctx.Set(middlewares.ClientId, user.ClientId)
 		logrus.Info("UserId: " + userId)
 		ctx.Next()
 	}

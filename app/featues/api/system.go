@@ -13,42 +13,43 @@ func ApplySystemAPI(
 	app *gin.RouterGroup,
 	systemEntity repository.ISystem,
 	sessionEntity repository.ISession,
+	userEntity repository.IUser,
 ) {
 
 	route := app.Group("system")
 
 	route.GET("",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.GetSystems(systemEntity),
 	)
 
 	route.POST("",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.AddSystem(systemEntity),
 	)
 
 	route.GET("/:id",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.GetSystemById(systemEntity),
 	)
 
 	route.DELETE("/:id",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.DeleteSystemById(systemEntity),
 	)
 
 	route.PUT("/:id",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.UpdateSystemById(systemEntity),
 	)
 

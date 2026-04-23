@@ -22,83 +22,83 @@ func ApplyUserAPI(
 	// Self-service (any authenticated user)
 	route.GET("/info",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.GetUserInfo(userEntity),
 	)
 
 	route.PUT("/info",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.UpdateUserInfo(userEntity),
 	)
 
 	route.PUT("/change-password",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
-		usecase.ChangePassword(userEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
+		usecase.ChangePassword(userEntity, sessionEntity),
 	)
 
 	// Management (SUPER + ADMIN)
 	route.GET("",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN, constant.MANAGER),
-		usecase.RequireSession(sessionEntity),
 		usecase.GetUserList(userEntity),
 	)
 
 	route.POST("",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
 		usecase.AddUserByRole(userEntity, systemEntity),
 	)
 
 	route.GET("/:id",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN, constant.MANAGER),
-		usecase.RequireSession(sessionEntity),
 		usecase.GetUserById(userEntity),
 	)
 
 	route.DELETE("/:id",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
 		usecase.DeleteUserById(userEntity),
 	)
 
 	route.PUT("/:id",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
 		usecase.UpdateUserById(userEntity),
 	)
 
 	route.PATCH("/:id/status",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
-		usecase.UpdateStatusById(userEntity),
+		usecase.UpdateStatusById(userEntity, sessionEntity),
 	)
 
 	route.PATCH("/:id/role",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
-		usecase.UpdateRoleById(userEntity),
+		usecase.UpdateRoleById(userEntity, sessionEntity),
 	)
 
 	route.PATCH("/:id/set-password",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
-		usecase.SetPassword(userEntity),
+		usecase.SetPassword(userEntity, sessionEntity),
 	)
 
 	route.POST("/:id/unlock",
 		middlewares.RequireAuthenticated(),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER, constant.ADMIN),
-		usecase.RequireSession(sessionEntity),
 		usecase.UnlockUserById(userEntity, loginGuard),
 	)
 }

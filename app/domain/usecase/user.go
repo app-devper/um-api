@@ -108,7 +108,7 @@ func AddUserByRole(userEntity repository.IUser, systemEntity repository.ISystem)
 	}
 }
 
-func ChangePassword(userEntity repository.IUser) gin.HandlerFunc {
+func ChangePassword(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.ChangePassword{}
 		err := ctx.ShouldBind(&req)
@@ -141,6 +141,11 @@ func ChangePassword(userEntity repository.IUser) gin.HandlerFunc {
 			logrus.Error(err)
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
+		}
+
+		currentSessionId := ctx.GetString(middlewares.SessionId)
+		if _, err := sessionEntity.RevokeOtherSessions(user.Id.Hex(), currentSessionId); err != nil {
+			logrus.Warn("revoke other sessions after password change: ", err)
 		}
 		ctx.JSON(http.StatusOK, result)
 	}
@@ -207,7 +212,7 @@ func GetUserInfo(userEntity repository.IUser) gin.HandlerFunc {
 	}
 }
 
-func SetPassword(userEntity repository.IUser) gin.HandlerFunc {
+func SetPassword(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.SetPassword{}
 		err := ctx.ShouldBind(&req)
@@ -241,11 +246,15 @@ func SetPassword(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
+		if _, err := sessionEntity.RevokeOtherSessions(id, ""); err != nil {
+			logrus.Warn("revoke sessions after admin password reset: ", err)
+		}
+
 		ctx.JSON(http.StatusOK, result)
 	}
 }
 
-func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
+func UpdateRoleById(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.UpdateRole{}
 		err := ctx.ShouldBind(&req)
@@ -298,11 +307,14 @@ func UpdateRoleById(userEntity repository.IUser) gin.HandlerFunc {
 			respondRepositoryError(ctx, err, "user")
 			return
 		}
+		if _, err := sessionEntity.RevokeOtherSessions(id, ""); err != nil {
+			logrus.Warn("revoke sessions after role change: ", err)
+		}
 		ctx.JSON(http.StatusOK, result)
 	}
 }
 
-func UpdateStatusById(userEntity repository.IUser) gin.HandlerFunc {
+func UpdateStatusById(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.UpdateStatus{}
 		err := ctx.ShouldBind(&req)
@@ -343,6 +355,9 @@ func UpdateStatusById(userEntity repository.IUser) gin.HandlerFunc {
 			logrus.Error(err)
 			respondRepositoryError(ctx, err, "user")
 			return
+		}
+		if _, err := sessionEntity.RevokeOtherSessions(id, ""); err != nil {
+			logrus.Warn("revoke sessions after status change: ", err)
 		}
 		ctx.JSON(http.StatusOK, result)
 	}

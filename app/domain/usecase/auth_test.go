@@ -529,28 +529,41 @@ func TestExchangeSSOTicketRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 func TestRequireSessionSetsUserIDOnSuccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
+	userID := primitive.NewObjectID()
 	sessionRepo := &authTestSessionRepo{
 		getByID: map[string]string{
-			"session-123": "user-123",
+			"session-123": userID.Hex(),
+		},
+	}
+	userRepo := &authTestUserRepo{
+		user: &model.User{
+			Id:       userID,
+			Username: "alice",
+			ClientId: "123",
+			Role:     constant.ADMIN,
+			Status:   constant.ACTIVE,
 		},
 	}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set(middlewares.SessionId, "session-123")
+	c.Set(middlewares.Role, "STALE")
+	c.Set(middlewares.ClientId, "999")
 
-	called := false
-	handler := RequireSession(sessionRepo)
-	handler(c)
-	if !c.IsAborted() {
-		called = true
-	}
+	RequireSession(sessionRepo, userRepo)(c)
 
-	if !called {
+	if c.IsAborted() {
 		t.Fatal("expected middleware to continue on valid session")
 	}
-	if got := c.GetString(middlewares.UserId); got != "user-123" {
+	if got := c.GetString(middlewares.UserId); got != userID.Hex() {
 		t.Fatalf("expected user id to be set, got %q", got)
+	}
+	if got := c.GetString(middlewares.Role); got != constant.ADMIN {
+		t.Fatalf("expected role to be overwritten from db, got %q", got)
+	}
+	if got := c.GetString(middlewares.ClientId); got != "123" {
+		t.Fatalf("expected clientId to be overwritten from db, got %q", got)
 	}
 }
 
@@ -558,18 +571,73 @@ func TestRequireSessionRejectsInvalidSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	sessionRepo := &authTestSessionRepo{getErr: errors.New("redis down")}
+	userRepo := &authTestUserRepo{}
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	c.Set(middlewares.SessionId, "session-123")
 
-	RequireSession(sessionRepo)(c)
+	RequireSession(sessionRepo, userRepo)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
 	}
 	if got := c.GetString(middlewares.UserId); got != "" {
 		t.Fatalf("expected no user id to be set, got %q", got)
+	}
+}
+
+func TestRequireSessionRejectsInactiveUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userID := primitive.NewObjectID()
+	sessionRepo := &authTestSessionRepo{
+		getByID: map[string]string{
+			"session-123": userID.Hex(),
+		},
+	}
+	userRepo := &authTestUserRepo{
+		user: &model.User{
+			Id:       userID,
+			Username: "alice",
+			ClientId: "123",
+			Role:     constant.ADMIN,
+			Status:   constant.INACTIVE,
+		},
+	}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set(middlewares.SessionId, "session-123")
+
+	RequireSession(sessionRepo, userRepo)(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !c.IsAborted() {
+		t.Fatal("expected middleware to abort on inactive user")
+	}
+}
+
+func TestRequireSessionRejectsMissingUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	sessionRepo := &authTestSessionRepo{
+		getByID: map[string]string{
+			"session-123": primitive.NewObjectID().Hex(),
+		},
+	}
+	userRepo := &authTestUserRepo{}
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set(middlewares.SessionId, "session-123")
+
+	RequireSession(sessionRepo, userRepo)(c)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
 	}
 }
 

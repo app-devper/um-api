@@ -47,7 +47,7 @@ func (app Routes) StartGin() {
 
 	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
 	api.ApplyUserAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard)
-	api.ApplySystemAPI(publicRoute, systemEntity, sessionEntity)
+	api.ApplySystemAPI(publicRoute, systemEntity, sessionEntity, userEntity)
 
 	r.NoRoute(middlewares.NoRoute())
 

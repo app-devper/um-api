@@ -29,7 +29,7 @@ func ApplyAuthAPI(
 
 	route.POST("/sso-ticket",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.CreateSSOTicket(ssoEntity, userEntity),
 	)
 
@@ -40,43 +40,43 @@ func ApplyAuthAPI(
 
 	route.GET("/keep-alive",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.KeepAlive(userEntity, sessionEntity),
 	)
 
 	route.GET("/system",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.GetSystem(systemEntity),
 	)
 
 	route.POST("/verify-password",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.VerifyPassword(userEntity),
 	)
 
 	route.POST("/logout",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.Logout(sessionEntity),
 	)
 
 	route.GET("/sessions",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.ListSessions(sessionEntity),
 	)
 
 	route.DELETE("/sessions",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.RevokeOtherSessions(sessionEntity),
 	)
 
 	route.DELETE("/sessions/:id",
 		middlewares.RequireAuthenticated(),
-		usecase.RequireSession(sessionEntity),
+		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.RevokeSession(sessionEntity),
 	)
 }
