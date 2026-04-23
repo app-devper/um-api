@@ -136,21 +136,52 @@ func (r *authTestSessionRepo) RevokeOtherSessions(userId string, currentSessionI
 }
 
 type authTestSystemRepo struct {
-	system *model.System
-	err    error
+	system           *model.System
+	byClient         map[string][]model.System
+	systemsResult    []model.System
+	systemsErr       error
+	createdSystem    *model.System
+	createErr        error
+	removedSystemId  string
+	removeSystemRes  *model.System
+	removeErr        error
+	updatedSystemId  string
+	updateSystemRes  *model.System
+	updateSystemErr  error
+	getByIdId        string
+	getByIdResult    *model.System
+	getByIdErr       error
+	getSystemsFilter request.GetSystems
+	getSystemsCalled bool
+	err              error
 }
 
 func (r *authTestSystemRepo) GetSystems(form request.GetSystems) ([]model.System, error) {
-	panic("unexpected call")
+	r.getSystemsCalled = true
+	r.getSystemsFilter = form
+	if r.systemsErr != nil {
+		return nil, r.systemsErr
+	}
+	return r.systemsResult, nil
 }
 func (r *authTestSystemRepo) GetSystemsByClientId(clientId string) ([]model.System, error) {
-	panic("unexpected call")
+	if r.byClient != nil {
+		return r.byClient[clientId], nil
+	}
+	if r.system != nil && r.system.ClientId == clientId {
+		return []model.System{*r.system}, nil
+	}
+	return nil, nil
 }
 func (r *authTestSystemRepo) GetSystemsByCode(systemCode string) ([]model.System, error) {
 	panic("unexpected call")
 }
 func (r *authTestSystemRepo) GetSystemById(id string) (*model.System, error) {
-	panic("unexpected call")
+	r.getByIdId = id
+	if r.getByIdErr != nil {
+		return nil, r.getByIdErr
+	}
+	return r.getByIdResult, nil
 }
 func (r *authTestSystemRepo) GetSystem(clientId string, systemCode string) (*model.System, error) {
 	if r.err != nil {
@@ -162,13 +193,32 @@ func (r *authTestSystemRepo) GetSystem(clientId string, systemCode string) (*mod
 	return nil, errors.New("not found")
 }
 func (r *authTestSystemRepo) CreateSystem(form request.System) (*model.System, error) {
-	panic("unexpected call")
+	if r.createErr != nil {
+		return nil, r.createErr
+	}
+	created := &model.System{
+		Id:         primitive.NewObjectID(),
+		ClientId:   form.ClientId,
+		SystemName: form.SystemName,
+		SystemCode: form.SystemCode,
+		Host:       form.Host,
+	}
+	r.createdSystem = created
+	return created, nil
 }
 func (r *authTestSystemRepo) RemoveSystemById(id string) (*model.System, error) {
-	panic("unexpected call")
+	r.removedSystemId = id
+	if r.removeErr != nil {
+		return nil, r.removeErr
+	}
+	return r.removeSystemRes, nil
 }
 func (r *authTestSystemRepo) UpdateSystemById(id string, form request.UpdateSystem) (*model.System, error) {
-	panic("unexpected call")
+	r.updatedSystemId = id
+	if r.updateSystemErr != nil {
+		return nil, r.updateSystemErr
+	}
+	return r.updateSystemRes, nil
 }
 
 type authTestLoginGuard struct {
@@ -188,12 +238,22 @@ func (g *authTestLoginGuard) Reset(username string) error {
 func (g *authTestLoginGuard) Unlock(username string) error { panic("unexpected call") }
 
 type authTestSSOTicketRepo struct {
-	payload *repository.TicketPayload
-	err     error
+	payload     *repository.TicketPayload
+	err         error
+	createInput *repository.TicketPayload
+	createRes   string
+	createErr   error
 }
 
 func (r *authTestSSOTicketRepo) Create(payload repository.TicketPayload) (string, error) {
-	panic("unexpected call")
+	r.createInput = &payload
+	if r.createErr != nil {
+		return "", r.createErr
+	}
+	if r.createRes == "" {
+		return "ticket-created", nil
+	}
+	return r.createRes, nil
 }
 
 func (r *authTestSSOTicketRepo) Consume(ticket string) (*repository.TicketPayload, error) {
