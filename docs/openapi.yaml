@@ -3,12 +3,24 @@ info:
   title: User Management API
   description: |
     User management (UM) API for managing users, authentication, authorization, and system access.
-    
+
     ## Roles
-    - **SUPER** — Full access across all clients
-    - **ADMIN** — Manages users within their own client
-    - **USER** — Self-service only
-    
+    - **SUPER** — Full access across all clients. Reserved for `clientId=000` and bootstrapped outside the UI.
+    - **ADMIN** — Manages `MANAGER` and `USER` within their own `clientId` (cannot touch another ADMIN or SUPER).
+    - **MANAGER** — Read-only list/get of users in the same tenant.
+    - **USER** — Self-service only.
+
+    ## Session & authorization semantics
+    Every authenticated request runs `RequireAuthenticated` (JWT signature + expiry) → `RequireSession` (Redis session lookup + MongoDB user load + `ACTIVE` status check) → `RequireAuthorization` (role gate). `RequireSession` overwrites the `role` and `clientId` in the request context with the values currently in MongoDB, so the JWT claims are never trusted for privilege decisions beyond the current request.
+
+    Sessions are wiped on security-sensitive changes:
+    - `PUT /user/change-password` — revokes every session for the caller except the current one.
+    - `PATCH /user/{id}/set-password` — revokes every session for the target user.
+    - `PATCH /user/{id}/role` — revokes every session for the target user.
+    - `PATCH /user/{id}/status` — revokes every session for the target user.
+
+    After any of these, the affected user's existing access tokens stop authenticating immediately, even before their 24-hour expiry.
+
     ## Error Format
     All error responses return a JSON body with `code` and `message` fields.
   version: 1.0.0
@@ -306,7 +318,8 @@ components:
             code: "UM-400-001"
             message: "bad request"
     Unauthorized:
-      description: Unauthorized
+      description: |
+        Unauthorized. Returned when the JWT is missing/invalid, the Redis session is gone (e.g. logout, admin revocation, password/role/status change on this user), or the user record is no longer `ACTIVE`.
       content:
         application/json:
           schema:
@@ -706,7 +719,9 @@ paths:
     put:
       tags: [User]
       summary: Change own password
-      description: Change the current user's password by providing the old and new passwords.
+      description: |
+        Change the current user's password by providing the old and new passwords.
+        On success, every other active session for this user is revoked — the caller's current session is preserved so they stay signed in on the device that performed the change.
       security:
         - BearerAuth: []
       requestBody:
@@ -747,8 +762,8 @@ paths:
       summary: List users
       description: |
         Returns a list of users.
-        - **SUPER**: all users
-        - **ADMIN**: users within the same clientId (excluding SUPER users)
+        - **SUPER**: all users across every clientId
+        - **ADMIN / MANAGER**: users within their own clientId (excluding SUPER users)
       security:
         - BearerAuth: []
       responses:
@@ -770,9 +785,9 @@ paths:
       tags: [User]
       summary: Create user
       description: |
-        Create a new user.
-        - **SUPER**: creates an ADMIN user (any valid clientId)
-        - **ADMIN**: creates a USER within their own clientId
+        Create a new user. The `role` field is optional; when omitted, the default is inferred from the caller's role.
+        - **SUPER**: can request any role. `SUPER` is only valid when the target `clientId` is `000`. Default when `role` is omitted: `ADMIN`.
+        - **ADMIN**: can only request `MANAGER` or `USER`, and only within their own `clientId`. Default: `USER`.
       security:
         - BearerAuth: []
       requestBody:
@@ -803,8 +818,8 @@ paths:
       summary: Get user by ID
       description: |
         Retrieve a specific user.
-        - **SUPER**: can access any user
-        - **ADMIN**: can only access users within their own clientId
+        - **SUPER**: can access any user across any clientId
+        - **ADMIN / MANAGER**: can only access users within their own clientId (cross-tenant lookups return 404)
       security:
         - BearerAuth: []
       parameters:
@@ -907,7 +922,9 @@ paths:
     patch:
       tags: [User]
       summary: Update user status
-      description: Set a user's status to ACTIVE or INACTIVE. Role hierarchy is enforced.
+      description: |
+        Set a user's status to `ACTIVE` or `INACTIVE`. Role hierarchy is enforced and callers cannot change their own status.
+        On success, every active session for the target user is revoked — any JWT they hold stops authenticating immediately.
       security:
         - BearerAuth: []
       parameters:
@@ -943,7 +960,8 @@ paths:
       summary: Update user role
       description: |
         Change a user's role. Role hierarchy is enforced.
-        Only SUPER can assign the SUPER role.
+        Only SUPER can assign the SUPER role, and the target must be in `clientId=000`.
+        On success, every active session for the target user is revoked — their existing JWT stops authenticating immediately.
       security:
         - BearerAuth: []
       parameters:
@@ -990,7 +1008,9 @@ paths:
     patch:
       tags: [User]
       summary: Set user password
-      description: Admin/Super sets a user's password directly. Role hierarchy is enforced.
+      description: |
+        Admin/Super sets a user's password directly. Role hierarchy is enforced.
+        On success, every active session for the target user is revoked — any JWT they hold stops authenticating immediately.
       security:
         - BearerAuth: []
       parameters:

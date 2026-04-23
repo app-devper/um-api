@@ -8,7 +8,8 @@ User management (UM) is defined as the effective management of users giving them
 - **Authentication** — JWT-based with session management (Redis)
 - **Authorization** — Role-based access control (`SUPER` / `ADMIN` / `MANAGER` / `USER`). `SUPER` is reserved for `clientId=000` and must be bootstrapped outside the UI.
 - **SSO handoff** — One-time ticket exchange so other front-ends (e.g. `dpharm.web.app`) can hand the user off to the UM profile page without re-login
-- **Session management** — List own active sessions with device / IP / system metadata and force-logout other devices
+- **Session management** — List own active sessions with device / IP / system metadata and force-logout other devices. Every authenticated request re-reads the user from MongoDB so role changes, status changes, and password/admin-reset events take effect on the next request (no 24 h JWT drift window)
+- **Automatic session revocation** — Password change, admin password reset, role change, and status change drop the target user's active sessions so stolen or stale tokens stop working immediately
 - **Brute-force protection** — IP rate limit on `/auth/login` (always on) + optional per-username account lockout after 5 consecutive failures for 15 minutes (opt-in via `LOGIN_LOCKOUT_ENABLED`, disabled by default)
 - **CORS** — Configurable cross-origin resource sharing
 - **Structured Error Handling** — Consistent error codes and messages across all endpoints
@@ -169,6 +170,18 @@ Login behavior notes:
 
 - `/auth/login` validates that the requested `system` exists for the user's tenant before issuing a token.
 - Disabled accounts still return `401`, and failed attempts participate in login lockout when `LOGIN_LOCKOUT_ENABLED` is enabled.
+
+## Session & authorization semantics
+
+- **Access tokens live 24 h**, but authorization is not decided from the JWT alone.
+- Every authenticated request passes through `RequireAuthenticated` (JWT signature + expiry) → `RequireSession` (Redis session lookup + MongoDB user load + `ACTIVE` status check) → `RequireAuthorization` (role gate). `RequireSession` overwrites the `role` and `clientId` in the request context with the values currently in MongoDB, so a JWT minted before a demotion no longer confers the old privileges on the next request.
+- A deactivated user (`status != ACTIVE`) receives `UM-401-002 token invalid` on their next request, even if their JWT and Redis session are still technically valid.
+- The following operations wipe the target user's sessions from Redis on success — any stolen or stale access token for that user stops authenticating immediately:
+  - `PUT /user/change-password` (keeps the caller's current session, revokes every other)
+  - `PATCH /user/{id}/set-password` (admin reset — revokes every session)
+  - `PATCH /user/{id}/role`
+  - `PATCH /user/{id}/status`
+- Users can proactively sign themselves out of other devices with `DELETE /auth/sessions` or revoke a specific device via `DELETE /auth/sessions/{id}`.
 
 ## Quick Test
 
