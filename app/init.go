@@ -1,8 +1,10 @@
 package app
 
 import (
+	"context"
 	"um/app/core/config"
 	"um/app/domain/repository"
+	"um/app/domain/usecase"
 	"um/app/featues/api"
 	"um/db"
 	"um/middlewares"
@@ -36,6 +38,11 @@ func (app Routes) StartGin() {
 		logrus.Fatal(err)
 	}
 	defer resource.Close()
+
+	r.GET("/health", usecase.Health(
+		func(ctx context.Context) error { return resource.UmDb.Client().Ping(ctx, nil) },
+		func(ctx context.Context) error { return resource.RdDB.Ping(ctx).Err() },
+	))
 
 	publicRoute := r.Group("/api/um/v1")
 

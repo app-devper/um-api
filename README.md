@@ -27,6 +27,12 @@ Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openap
 
 ## API Endpoints
 
+### Health
+
+| Method | Path      | Auth | Description                                                                                                  |
+|--------|-----------|------|--------------------------------------------------------------------------------------------------------------|
+| GET    | `/health` | No   | Liveness + MongoDB/Redis readiness. Returns `200 {status:"ok"}` when both ping, `503 {status:"degraded"}` otherwise. Mounted at the router root (not under `/api/um/v1`). |
+
 ### Auth (`/api/um/v1/auth`)
 
 | Method | Path               | Auth | Description                                   |

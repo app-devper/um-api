@@ -30,6 +30,8 @@ servers:
     description: Local development
 
 tags:
+  - name: Health
+    description: Liveness / readiness probe
   - name: Auth
     description: Authentication and session management
   - name: User
@@ -57,6 +59,30 @@ components:
       required:
         - code
         - message
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+          description: "`ok` when every dependency check passes, `degraded` when any check fails."
+        checks:
+          type: object
+          description: Per-dependency status. Each value is `ok` on success or the error message returned by the ping.
+          properties:
+            mongo:
+              type: string
+              example: ok
+            redis:
+              type: string
+              example: ok
+          required:
+            - mongo
+            - redis
+      required:
+        - status
+        - checks
 
     LoginRequest:
       type: object
@@ -390,6 +416,45 @@ components:
             message: "internal server error"
 
 paths:
+  # ── Health ────────────────────────────────────────────
+  /health:
+    servers:
+      - url: http://localhost:8585
+        description: Local development (router root, not under /api/um/v1)
+    get:
+      tags: [Health]
+      summary: Liveness and dependency readiness probe
+      description: |
+        Pings MongoDB and Redis with a 2-second deadline and reports per-dependency status.
+
+        - `200 {status: "ok"}` — every dependency responded to ping.
+        - `503 {status: "degraded"}` — at least one dependency failed; its error message is returned under `checks.<name>`.
+
+        Mounted at the router root, so the path is literally `/health` (not `/api/um/v1/health`). No authentication required — safe to expose to load balancers and uptime checks.
+      responses:
+        "200":
+          description: All dependencies healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: ok
+                checks:
+                  mongo: ok
+                  redis: ok
+        "503":
+          description: One or more dependencies are unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: degraded
+                checks:
+                  mongo: "server selection error: context deadline exceeded"
+                  redis: ok
+
   # ── Auth ──────────────────────────────────────────────
   /auth/login:
     post:
