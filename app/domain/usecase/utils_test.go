@@ -36,28 +36,28 @@ func TestClientIdForRoleNonSuperReturnsContext(t *testing.T) {
 }
 
 func TestValidateUserRoleSuperCannotManageSuper(t *testing.T) {
-	if err := ValidateUserRole(constant.SUPER, &model.User{Role: constant.SUPER}); err == nil {
+	if err := validateUserRole(constant.SUPER, &model.User{Role: constant.SUPER}); err == nil {
 		t.Fatal("SUPER should not be allowed to manage another SUPER")
 	}
-	if err := ValidateUserRole(constant.SUPER, &model.User{Role: constant.ADMIN}); err != nil {
+	if err := validateUserRole(constant.SUPER, &model.User{Role: constant.ADMIN}); err != nil {
 		t.Fatalf("SUPER should be allowed to manage ADMIN, got %v", err)
 	}
-	if err := ValidateUserRole(constant.SUPER, &model.User{Role: constant.USER}); err != nil {
+	if err := validateUserRole(constant.SUPER, &model.User{Role: constant.USER}); err != nil {
 		t.Fatalf("SUPER should be allowed to manage USER, got %v", err)
 	}
 }
 
 func TestValidateUserRoleAdminBoundaries(t *testing.T) {
-	if err := ValidateUserRole(constant.ADMIN, &model.User{Role: constant.SUPER}); err == nil {
+	if err := validateUserRole(constant.ADMIN, &model.User{Role: constant.SUPER}); err == nil {
 		t.Fatal("ADMIN should not be allowed to manage SUPER")
 	}
-	if err := ValidateUserRole(constant.ADMIN, &model.User{Role: constant.ADMIN}); err == nil {
+	if err := validateUserRole(constant.ADMIN, &model.User{Role: constant.ADMIN}); err == nil {
 		t.Fatal("ADMIN should not be allowed to manage another ADMIN")
 	}
-	if err := ValidateUserRole(constant.ADMIN, &model.User{Role: constant.MANAGER}); err != nil {
+	if err := validateUserRole(constant.ADMIN, &model.User{Role: constant.MANAGER}); err != nil {
 		t.Fatalf("ADMIN should be allowed to manage MANAGER, got %v", err)
 	}
-	if err := ValidateUserRole(constant.ADMIN, &model.User{Role: constant.USER}); err != nil {
+	if err := validateUserRole(constant.ADMIN, &model.User{Role: constant.USER}); err != nil {
 		t.Fatalf("ADMIN should be allowed to manage USER, got %v", err)
 	}
 }
@@ -65,7 +65,7 @@ func TestValidateUserRoleAdminBoundaries(t *testing.T) {
 func TestValidateUserRoleManagerAndUserForbidden(t *testing.T) {
 	for _, caller := range []string{constant.MANAGER, constant.USER, "UNKNOWN"} {
 		for _, target := range []string{constant.SUPER, constant.ADMIN, constant.MANAGER, constant.USER} {
-			if err := ValidateUserRole(caller, &model.User{Role: target}); err == nil {
+			if err := validateUserRole(caller, &model.User{Role: target}); err == nil {
 				t.Fatalf("%s must not be allowed to manage %s", caller, target)
 			}
 		}

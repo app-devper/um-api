@@ -51,6 +51,9 @@ func InitResource(cfg *config.AppConfig) (*Resource, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := mongoClient.Ping(ctx, nil); err != nil {
+		return nil, err
+	}
 
 	// Redis client
 	redisOp, err := redisOptions(cfg.RedisHost)

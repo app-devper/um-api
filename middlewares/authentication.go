@@ -2,8 +2,8 @@ package middlewares
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 	"um/app/core/errs"
@@ -28,12 +28,11 @@ type TokenParam struct {
 	ExpirationTime time.Time
 }
 
-func GenerateJwtToken(param *TokenParam) (string, error) {
-	key := os.Getenv("SECRET_KEY")
-	if key == "" {
+func GenerateJwtToken(secretKey string, param *TokenParam) (string, error) {
+	if secretKey == "" {
 		return "", errors.New("SECRET_KEY is not set")
 	}
-	jwtKey := []byte(key)
+	jwtKey := []byte(secretKey)
 	claims := &AccessClaims{
 		Role:     param.Role,
 		System:   param.System,
@@ -51,15 +50,14 @@ func GenerateJwtToken(param *TokenParam) (string, error) {
 	return tokenString, nil
 }
 
-func RequireAuthenticated() gin.HandlerFunc {
+func RequireAuthenticated(secretKey string) gin.HandlerFunc {
+	jwtKey := []byte(secretKey)
 	return func(ctx *gin.Context) {
-		key := os.Getenv("SECRET_KEY")
-		if key == "" {
+		if len(jwtKey) == 0 {
 			logrus.Error("SECRET_KEY is not set")
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
-		jwtKey := []byte(key)
 		token := ctx.GetHeader("Authorization")
 		if token == "" {
 			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrMissingAuthHeader, "missing authorization header"))
@@ -72,6 +70,9 @@ func RequireAuthenticated() gin.HandlerFunc {
 		}
 		claims := &AccessClaims{}
 		tkn, err := jwt.ParseWithClaims(jwtToken[1], claims, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return jwtKey, nil
 		})
 		if err != nil {

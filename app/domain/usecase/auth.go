@@ -40,7 +40,7 @@ func RequireSession(sessionEntity repository.ISession, userEntity repository.IUs
 	}
 }
 
-func Login(userEntity repository.IUser, sessionEntity repository.ISession, systemEntity repository.ISystem, loginGuard repository.ILoginGuard) gin.HandlerFunc {
+func Login(secretKey string, userEntity repository.IUser, sessionEntity repository.ISession, systemEntity repository.ISystem, loginGuard repository.ILoginGuard) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.Login{}
 		if err := ctx.ShouldBind(&req); err != nil {
@@ -104,7 +104,7 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession, syste
 			ClientId:       user.ClientId,
 			ExpirationTime: expireDate,
 		}
-		token, err := middlewares.GenerateJwtToken(param)
+		token, err := middlewares.GenerateJwtToken(secretKey, param)
 		if err != nil {
 			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
 				logrus.Error(removeErr)
@@ -119,7 +119,7 @@ func Login(userEntity repository.IUser, sessionEntity repository.ISession, syste
 	}
 }
 
-func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
+func KeepAlive(secretKey string, userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		sessionId := ctx.GetString(middlewares.SessionId)
 		userId := ctx.GetString(middlewares.UserId)
@@ -152,7 +152,7 @@ func KeepAlive(userEntity repository.IUser, sessionEntity repository.ISession) g
 			ClientId:       user.ClientId,
 			ExpirationTime: expireDate,
 		}
-		token, err := middlewares.GenerateJwtToken(param)
+		token, err := middlewares.GenerateJwtToken(secretKey, param)
 		if err != nil {
 			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
 				logrus.Error(removeErr)
@@ -215,7 +215,7 @@ func CreateSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IUse
 	}
 }
 
-func ExchangeSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
+func ExchangeSSOTicket(secretKey string, ssoEntity repository.ISSOTicket, userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.ExchangeTicket{}
 		if err := ctx.ShouldBind(&req); err != nil {
@@ -258,7 +258,7 @@ func ExchangeSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IU
 			ClientId:       user.ClientId,
 			ExpirationTime: expireDate,
 		}
-		token, err := middlewares.GenerateJwtToken(param)
+		token, err := middlewares.GenerateJwtToken(secretKey, param)
 		if err != nil {
 			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
 				logrus.Error(removeErr)

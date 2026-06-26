@@ -52,9 +52,9 @@ func (app Routes) StartGin() {
 	loginGuard := repository.NewLoginGuardEntity(resource, cfg.LockoutEnabled)
 	ssoEntity := repository.NewSSOTicketEntity(resource)
 
-	api.ApplyAuthAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
-	api.ApplyUserAPI(publicRoute, userEntity, sessionEntity, systemEntity, loginGuard)
-	api.ApplySystemAPI(publicRoute, systemEntity, sessionEntity, userEntity)
+	api.ApplyAuthAPI(publicRoute, cfg.SecretKey, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
+	api.ApplyUserAPI(publicRoute, cfg.SecretKey, userEntity, sessionEntity, systemEntity, loginGuard)
+	api.ApplySystemAPI(publicRoute, cfg.SecretKey, systemEntity, sessionEntity, userEntity)
 
 	r.NoRoute(middlewares.NoRoute())
 

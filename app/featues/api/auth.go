@@ -12,6 +12,7 @@ import (
 
 func ApplyAuthAPI(
 	app *gin.RouterGroup,
+	secretKey string,
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
 	systemEntity repository.ISystem,
@@ -24,58 +25,58 @@ func ApplyAuthAPI(
 
 	route.POST("/login",
 		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
-		usecase.Login(userEntity, sessionEntity, systemEntity, loginGuard),
+		usecase.Login(secretKey, userEntity, sessionEntity, systemEntity, loginGuard),
 	)
 
 	route.POST("/sso-ticket",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.CreateSSOTicket(ssoEntity, userEntity),
 	)
 
 	route.POST("/exchange",
 		middlewares.RateLimiter(rdb, 10, 1*time.Minute),
-		usecase.ExchangeSSOTicket(ssoEntity, userEntity, sessionEntity),
+		usecase.ExchangeSSOTicket(secretKey, ssoEntity, userEntity, sessionEntity),
 	)
 
 	route.GET("/keep-alive",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.KeepAlive(userEntity, sessionEntity),
+		usecase.KeepAlive(secretKey, userEntity, sessionEntity),
 	)
 
 	route.GET("/system",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.GetSystem(systemEntity),
 	)
 
 	route.POST("/verify-password",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.VerifyPassword(userEntity),
 	)
 
 	route.POST("/logout",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.Logout(sessionEntity),
 	)
 
 	route.GET("/sessions",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.ListSessions(sessionEntity),
 	)
 
 	route.DELETE("/sessions",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.RevokeOtherSessions(sessionEntity),
 	)
 
 	route.DELETE("/sessions/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		usecase.RevokeSession(sessionEntity),
 	)

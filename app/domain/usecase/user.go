@@ -167,7 +167,7 @@ func DeleteUserById(userEntity repository.IUser) gin.HandlerFunc {
 			respondRepositoryError(ctx, err, "user")
 			return
 		}
-		err = ValidateUserRole(role, user)
+		err = validateUserRole(role, user)
 		if err != nil {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
 			return
@@ -230,7 +230,7 @@ func SetPassword(userEntity repository.IUser, sessionEntity repository.ISession)
 			return
 		}
 
-		err = ValidateUserRole(role, user)
+		err = validateUserRole(role, user)
 		if err != nil {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
 			return
@@ -287,7 +287,7 @@ func UpdateRoleById(userEntity repository.IUser, sessionEntity repository.ISessi
 			return
 		}
 
-		err = ValidateUserRole(role, user)
+		err = validateUserRole(role, user)
 		if err != nil {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
 			return
@@ -342,7 +342,7 @@ func UpdateStatusById(userEntity repository.IUser, sessionEntity repository.ISes
 			respondRepositoryError(ctx, err, "user")
 			return
 		}
-		err = ValidateUserRole(role, user)
+		err = validateUserRole(role, user)
 		if err != nil {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
 			return
@@ -396,7 +396,7 @@ func UnlockUserById(userEntity repository.IUser, loginGuard repository.ILoginGua
 			respondRepositoryError(ctx, err, "user")
 			return
 		}
-		if err := ValidateUserRole(role, user); err != nil {
+		if err := validateUserRole(role, user); err != nil {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
 			return
 		}
@@ -428,7 +428,7 @@ func UpdateUserById(userEntity repository.IUser) gin.HandlerFunc {
 				respondRepositoryError(ctx, err, "user")
 				return
 			}
-			err = ValidateUserRole(role, user)
+			err = validateUserRole(role, user)
 			if err != nil {
 				errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrInvalidRolePermission, err.Error()))
 				return

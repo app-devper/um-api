@@ -117,7 +117,6 @@ func TestCreateSSOTicketUserNotFound(t *testing.T) {
 
 func TestExchangeSSOTicketActiveUserMintsFreshToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	userID := primitive.NewObjectID()
 	userRepo := &authTestUserRepo{
@@ -145,7 +144,7 @@ func TestExchangeSSOTicketActiveUserMintsFreshToken(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(ssoRepo, userRepo, sessionRepo)(c)
+	ExchangeSSOTicket("test-secret", ssoRepo, userRepo, sessionRepo)(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -166,7 +165,6 @@ func TestExchangeSSOTicketActiveUserMintsFreshToken(t *testing.T) {
 
 func TestExchangeSSOTicketRejectsInactiveUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	userID := primitive.NewObjectID()
 	userRepo := &authTestUserRepo{
@@ -194,7 +192,7 @@ func TestExchangeSSOTicketRejectsInactiveUser(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(ssoRepo, userRepo, sessionRepo)(c)
+	ExchangeSSOTicket("test-secret", ssoRepo, userRepo, sessionRepo)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for inactive user, got %d body=%s", w.Code, w.Body.String())

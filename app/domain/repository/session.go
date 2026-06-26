@@ -79,10 +79,12 @@ func (e *sessionEntity) CreateSession(userId string, expiration time.Duration, m
 	if err := e.rdb.Set(ctx, sessionPrefix+sessionId, body, expiration).Err(); err != nil {
 		return "", err
 	}
-	if err := e.rdb.SAdd(ctx, userSessionsPrefix+userId, sessionId).Err(); err != nil {
+	pipe := e.rdb.TxPipeline()
+	pipe.SAdd(ctx, userSessionsPrefix+userId, sessionId)
+	pipe.Expire(ctx, userSessionsPrefix+userId, expiration)
+	if _, err := pipe.Exec(ctx); err != nil {
 		return "", err
 	}
-	e.rdb.Expire(ctx, userSessionsPrefix+userId, expiration)
 	return sessionId, nil
 }
 
@@ -110,7 +112,9 @@ func (e *sessionEntity) UpdateSessionExpireById(sessionId string, expiration tim
 	if err := e.rdb.Set(ctx, sessionPrefix+sessionId, body, expiration).Err(); err != nil {
 		return err
 	}
-	e.rdb.Expire(ctx, userSessionsPrefix+data.UserId, expiration)
+	if err := e.rdb.Expire(ctx, userSessionsPrefix+data.UserId, expiration).Err(); err != nil {
+		return err
+	}
 	return nil
 }
 

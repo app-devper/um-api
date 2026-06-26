@@ -11,6 +11,7 @@ import (
 
 func ApplySystemAPI(
 	app *gin.RouterGroup,
+	secretKey string,
 	systemEntity repository.ISystem,
 	sessionEntity repository.ISession,
 	userEntity repository.IUser,
@@ -19,35 +20,35 @@ func ApplySystemAPI(
 	route := app.Group("system")
 
 	route.GET("",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.GetSystems(systemEntity),
 	)
 
 	route.POST("",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.AddSystem(systemEntity),
 	)
 
 	route.GET("/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.GetSystemById(systemEntity),
 	)
 
 	route.DELETE("/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.DeleteSystemById(systemEntity),
 	)
 
 	route.PUT("/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
 		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
 		usecase.UpdateSystemById(systemEntity),

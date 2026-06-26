@@ -268,7 +268,6 @@ func (r *authTestSSOTicketRepo) Consume(ticket string) (*repository.TicketPayloa
 
 func TestLoginRejectsUnknownSystemForUserTenant(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	hashed, err := utils.HashPassword("password123")
 	if err != nil {
@@ -299,7 +298,7 @@ func TestLoginRejectsUnknownSystemForUserTenant(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(userRepo, sessionRepo, systemRepo, loginGuard)(c)
+	Login("test-secret", userRepo, sessionRepo, systemRepo, loginGuard)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
@@ -314,7 +313,6 @@ func TestLoginRejectsUnknownSystemForUserTenant(t *testing.T) {
 
 func TestLoginCreatesSessionWhenSystemBelongsToUserTenant(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	hashed, err := utils.HashPassword("password123")
 	if err != nil {
@@ -351,7 +349,7 @@ func TestLoginCreatesSessionWhenSystemBelongsToUserTenant(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(userRepo, sessionRepo, systemRepo, loginGuard)(c)
+	Login("test-secret", userRepo, sessionRepo, systemRepo, loginGuard)(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -381,7 +379,6 @@ func TestLoginCreatesSessionWhenSystemBelongsToUserTenant(t *testing.T) {
 
 func TestLoginRejectsWrongPassword(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	hashed, err := utils.HashPassword("password123")
 	if err != nil {
@@ -418,7 +415,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(userRepo, sessionRepo, systemRepo, loginGuard)(c)
+	Login("test-secret", userRepo, sessionRepo, systemRepo, loginGuard)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
@@ -436,7 +433,6 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 
 func TestLoginRejectsInactiveUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	hashed, err := utils.HashPassword("password123")
 	if err != nil {
@@ -473,7 +469,7 @@ func TestLoginRejectsInactiveUser(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(userRepo, sessionRepo, systemRepo, loginGuard)(c)
+	Login("test-secret", userRepo, sessionRepo, systemRepo, loginGuard)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
@@ -491,7 +487,6 @@ func TestLoginRejectsInactiveUser(t *testing.T) {
 
 func TestLoginRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "")
 
 	hashed, err := utils.HashPassword("password123")
 	if err != nil {
@@ -528,7 +523,7 @@ func TestLoginRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(userRepo, sessionRepo, systemRepo, loginGuard)(c)
+	Login("", userRepo, sessionRepo, systemRepo, loginGuard)(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
@@ -543,7 +538,6 @@ func TestLoginRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 
 func TestExchangeSSOTicketRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "")
 
 	userID := primitive.NewObjectID()
 	userRepo := &authTestUserRepo{
@@ -573,7 +567,7 @@ func TestExchangeSSOTicketRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(ssoRepo, userRepo, sessionRepo)(c)
+	ExchangeSSOTicket("", ssoRepo, userRepo, sessionRepo)(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
@@ -836,7 +830,6 @@ func TestRevokeOtherSessionsReturnsCount(t *testing.T) {
 
 func TestKeepAliveReturnsTokenAndExtendsSession(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "test-secret")
 
 	userID := primitive.NewObjectID()
 	userRepo := &authTestUserRepo{
@@ -856,7 +849,7 @@ func TestKeepAliveReturnsTokenAndExtendsSession(t *testing.T) {
 	c.Set(middlewares.UserId, userID.Hex())
 	c.Set(middlewares.System, "UM")
 
-	KeepAlive(userRepo, sessionRepo)(c)
+	KeepAlive("test-secret", userRepo, sessionRepo)(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -880,7 +873,6 @@ func TestKeepAliveReturnsTokenAndExtendsSession(t *testing.T) {
 
 func TestKeepAliveRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	t.Setenv("SECRET_KEY", "")
 
 	userID := primitive.NewObjectID()
 	userRepo := &authTestUserRepo{
@@ -900,7 +892,7 @@ func TestKeepAliveRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	c.Set(middlewares.UserId, userID.Hex())
 	c.Set(middlewares.System, "UM")
 
-	KeepAlive(userRepo, sessionRepo)(c)
+	KeepAlive("", userRepo, sessionRepo)(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
