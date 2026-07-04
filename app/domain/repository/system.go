@@ -1,16 +1,17 @@
 package repository
 
 import (
-	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"time"
 	"um/app/core/utils"
 	"um/app/domain/model"
 	"um/app/featues/request"
 	"um/db"
+
+	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type systemEntity struct {
@@ -30,7 +31,7 @@ type ISystem interface {
 
 func NewSystemEntity(resource *db.Resource) ISystem {
 	systemRepo := resource.UmDb.Collection("systems")
-	var entity ISystem = &systemEntity{systemRepo: systemRepo}
+	entity := &systemEntity{systemRepo: systemRepo}
 	return entity
 }
 
@@ -38,7 +39,7 @@ func (entity systemEntity) GetSystems(form request.GetSystems) (items []model.Sy
 	logrus.Info("GetSystems")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var queries = bson.M{}
+	queries := bson.M{}
 	if form.SystemCode != "" {
 		queries["systemCode"] = form.SystemCode
 	}
@@ -49,8 +50,9 @@ func (entity systemEntity) GetSystems(form request.GetSystems) (items []model.Sy
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var item model.System
+		item := model.System{}
 		err = cursor.Decode(&item)
 		if err != nil {
 			logrus.Error(err)
@@ -69,7 +71,7 @@ func (entity systemEntity) GetSystem(clientId string, systemCode string) (*model
 	logrus.Info("GetSystem")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var item model.System
+	item := model.System{}
 	err := entity.systemRepo.FindOne(ctx, bson.M{"clientId": clientId, "systemCode": systemCode}).Decode(&item)
 	if err != nil {
 		return nil, err
@@ -85,8 +87,9 @@ func (entity systemEntity) GetSystemsByClientId(clientId string) (items []model.
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var item model.System
+		item := model.System{}
 		err = cursor.Decode(&item)
 		if err != nil {
 			logrus.Error(err)
@@ -109,8 +112,9 @@ func (entity systemEntity) GetSystemsByCode(systemCode string) (items []model.Sy
 	if err != nil {
 		return nil, err
 	}
+	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
-		var item model.System
+		item := model.System{}
 		err = cursor.Decode(&item)
 		if err != nil {
 			logrus.Error(err)
@@ -129,8 +133,12 @@ func (entity systemEntity) GetSystemById(id string) (*model.System, error) {
 	logrus.Info("GetSystemById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var item model.System
-	err := entity.systemRepo.FindOne(ctx, bson.M{"_id": id}).Decode(&item)
+	item := model.System{}
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	err = entity.systemRepo.FindOne(ctx, bson.M{"_id": objId}).Decode(&item)
 	if err != nil {
 		return nil, err
 	}
@@ -141,8 +149,7 @@ func (entity systemEntity) CreateSystem(form request.System) (*model.System, err
 	logrus.Info("CreateSystem")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-
-	var id = primitive.NewObjectID()
+	id := primitive.NewObjectID()
 	createdBy, _ := primitive.ObjectIDFromHex(form.CreatedBy)
 	item := model.System{
 		Id:          id,
@@ -166,9 +173,12 @@ func (entity systemEntity) RemoveSystemById(id string) (*model.System, error) {
 	logrus.Info("RemoveSystemById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	var item model.System
-	objId, _ := primitive.ObjectIDFromHex(id)
-	err := entity.systemRepo.FindOne(ctx, bson.M{"_id": objId}).Decode(&item)
+	item := model.System{}
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
+	err = entity.systemRepo.FindOne(ctx, bson.M{"_id": objId}).Decode(&item)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +193,10 @@ func (entity systemEntity) UpdateSystemById(id string, form request.UpdateSystem
 	logrus.Info("UpdateSystemById")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
-	objId, _ := primitive.ObjectIDFromHex(id)
+	objId, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return nil, err
+	}
 	item, err := entity.GetSystemById(id)
 	if err != nil {
 		return nil, err

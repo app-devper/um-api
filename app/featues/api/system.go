@@ -1,57 +1,56 @@
 package api
 
 import (
-	"github.com/gin-gonic/gin"
 	"um/app/core/constant"
 	"um/app/domain/repository"
 	"um/app/domain/usecase"
 	"um/middlewares"
+
+	"github.com/gin-gonic/gin"
 )
 
 func ApplySystemAPI(
 	app *gin.RouterGroup,
+	secretKey string,
 	systemEntity repository.ISystem,
 	sessionEntity repository.ISession,
+	userEntity repository.IUser,
 ) {
 
 	route := app.Group("system")
 
 	route.GET("",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.GetSystems(systemEntity),
 	)
 
-	route.GET("/pos/products/lots/expire-notify",
-		usecase.NotifyPosProductLotsExpire(systemEntity),
-	)
-
 	route.POST("",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.AddSystem(systemEntity),
 	)
 
 	route.GET("/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.GetSystemById(systemEntity),
 	)
 
 	route.DELETE("/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.DeleteSystemById(systemEntity),
 	)
 
 	route.PUT("/:id",
-		middlewares.RequireAuthenticated(),
+		middlewares.RequireAuthenticated(secretKey),
+		usecase.RequireSession(sessionEntity, userEntity),
 		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.RequireSession(sessionEntity),
 		usecase.UpdateSystemById(systemEntity),
 	)
 

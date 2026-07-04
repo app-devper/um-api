@@ -1,8 +1,11 @@
 package middlewares
 
 import (
-	"github.com/gin-gonic/gin"
 	"net/http"
+	"um/app/core/errs"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 func NewRecovery() gin.HandlerFunc {
@@ -10,7 +13,6 @@ func NewRecovery() gin.HandlerFunc {
 }
 
 func recoveryHandler(ctx *gin.Context, err interface{}) {
-	ctx.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-		"error": err,
-	})
+	logrus.Errorf("panic recovered: %v", err)
+	errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 }
