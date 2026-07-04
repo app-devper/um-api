@@ -1,13 +1,16 @@
 package middlewares
 
 import (
+	"errors"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+	"um/app/core/errs"
+
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/sirupsen/logrus"
-	"net/http"
-	"os"
-	"strings"
-	"time"
 )
 
 type AccessClaims struct {
@@ -25,8 +28,11 @@ type TokenParam struct {
 	ExpirationTime time.Time
 }
 
-func GenerateJwtToken(param *TokenParam) string {
-	var jwtKey = []byte(os.Getenv("SECRET_KEY"))
+func GenerateJwtToken(secretKey string, param *TokenParam) (string, error) {
+	if secretKey == "" {
+		return "", errors.New("SECRET_KEY is not set")
+	}
+	jwtKey := []byte(secretKey)
 	claims := &AccessClaims{
 		Role:     param.Role,
 		System:   param.System,
@@ -39,34 +45,43 @@ func GenerateJwtToken(param *TokenParam) string {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(jwtKey)
 	if err != nil {
-		logrus.Error(err)
+		return "", err
 	}
-	return tokenString
+	return tokenString, nil
 }
 
-func RequireAuthenticated() gin.HandlerFunc {
-	jwtKey := []byte(os.Getenv("SECRET_KEY"))
+func RequireAuthenticated(secretKey string) gin.HandlerFunc {
+	jwtKey := []byte(secretKey)
 	return func(ctx *gin.Context) {
+		if len(jwtKey) == 0 {
+			logrus.Error("SECRET_KEY is not set")
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
 		token := ctx.GetHeader("Authorization")
 		if token == "" {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrMissingAuthHeader, "missing authorization header"))
 			return
 		}
 		jwtToken := strings.Split(token, "Bearer ")
 		if len(jwtToken) < 2 {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization header"})
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrMissingAuthHeader, "missing authorization header"))
 			return
 		}
 		claims := &AccessClaims{}
 		tkn, err := jwt.ParseWithClaims(jwtToken[1], claims, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
 			return jwtKey, nil
 		})
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+			logrus.Warn("token parse error: ", err)
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
 			return
 		}
 		if tkn == nil || !tkn.Valid || claims.ID == "" {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "token invalid"})
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
 			return
 		}
 
@@ -79,6 +94,7 @@ func RequireAuthenticated() gin.HandlerFunc {
 		logrus.Info("Role: " + claims.Role)
 		logrus.Info("System: " + claims.System)
 		logrus.Info("ClientId: " + claims.ClientId)
-		return
+
+		ctx.Next()
 	}
 }

@@ -7,9 +7,8 @@ import (
 
 // NewCors return new gin handler fuc to handle CORS request
 func NewCors(allowedOrigins []string) gin.HandlerFunc {
-	return cors.New(cors.Config{
-		AllowOrigins: allowedOrigins,
-		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"},
+	config := cors.Config{
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"},
 		AllowHeaders: []string{
 			"Origin", "Host",
 			"Content-Type", "Content-Length",
@@ -18,5 +17,14 @@ func NewCors(allowedOrigins []string) gin.HandlerFunc {
 		},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
-	})
+	}
+
+	if len(allowedOrigins) == 1 && allowedOrigins[0] == "*" {
+		config.AllowAllOrigins = true
+		config.AllowCredentials = false
+	} else {
+		config.AllowOrigins = allowedOrigins
+	}
+
+	return cors.New(config)
 }

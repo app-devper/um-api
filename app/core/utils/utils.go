@@ -3,11 +3,12 @@ package utils
 import (
 	"context"
 	"crypto/rand"
+	"strings"
 	"time"
 )
 
 func InitContext() (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	return ctx, cancel
 }
 
@@ -37,4 +38,8 @@ func GenerateRefId(length int) string {
 		buffer[i] = alphabet[int(buffer[i])%otpCharsLength]
 	}
 	return string(buffer)
+}
+
+func NormalizeUsername(username string) string {
+	return strings.TrimSpace(username)
 }

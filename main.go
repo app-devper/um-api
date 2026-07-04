@@ -5,6 +5,6 @@ import (
 )
 
 func main() {
-	var server app.Routes
+	server := app.Routes{}
 	server.StartGin()
 }

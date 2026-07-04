@@ -1,30 +1,249 @@
-# User Management
+# User Management API
+
 User management (UM) is defined as the effective management of users giving them access to systems.
 
-# Feature
-* CRUD API
-* Authentication
-* Authorization
-* CORS
+## Features
 
+- **CRUD API** — Full user and system management
+- **Authentication** — JWT-based with session management (Redis)
+- **Authorization** — Role-based access control (`SUPER` / `ADMIN` / `MANAGER` / `USER`). `SUPER` is reserved for `clientId=000` and must be bootstrapped outside the UI.
+- **SSO handoff** — One-time ticket exchange so other front-ends (e.g. `dpharm.web.app`) can hand the user off to the UM profile page without re-login
+- **Session management** — List own active sessions with device / IP / system metadata and force-logout other devices. Every authenticated request re-reads the user from MongoDB so role changes, status changes, and password/admin-reset events take effect on the next request (no 24 h JWT drift window)
+- **Automatic session revocation** — Password change, admin password reset, role change, and status change drop the target user's active sessions so stolen or stale tokens stop working immediately
+- **Brute-force protection** — IP rate limit on `/auth/login` (always on) + optional per-username account lockout after 5 consecutive failures for 15 minutes (opt-in via `LOGIN_LOCKOUT_ENABLED`, disabled by default)
+- **CORS** — Configurable cross-origin resource sharing
+- **Structured Error Handling** — Consistent error codes and messages across all endpoints
 
-# Technologies
-* [Gin](https://github.com/gin-gonic/gin)
-* [MongoDB](https://www.mongodb.com)
-* [Redis](https://redis.io)
+## Technologies
 
-# Set up
-* Create file .env
-* Set MongoDB URI and DB
-  - PORT = "8585" or your port
-  - MONGO_HOST = "your host/ localhost:27017"
-  - MONGO_UM_DB_NAME = "your db name"
-  - REDIS_HOST = "your redis host"
-  - SECRET_KEY = "your secret key"
+- [Gin](https://github.com/gin-gonic/gin) — HTTP web framework
+- [MongoDB](https://www.mongodb.com) — Primary database
+- [Redis](https://redis.io) — Session storage
+- [JWT](https://github.com/golang-jwt/jwt) — Token-based authentication
 
-# Run
-* `go mod download` for download dependencies
-* `go run main.go`
-* `nodemon --exec go run main.go --signal SIGTERM` for run with nodemon
+## API Documentation
 
+Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openapi.yaml). You can view it with [Swagger Editor](https://editor.swagger.io) or any OpenAPI-compatible tool.
 
+## API Endpoints
+
+### Health
+
+| Method | Path      | Auth | Description                                                                                                  |
+|--------|-----------|------|--------------------------------------------------------------------------------------------------------------|
+| GET    | `/health` | No   | Liveness + MongoDB/Redis readiness. Returns `200 {status:"ok"}` when both ping, `503 {status:"degraded"}` otherwise. Mounted at the router root (not under `/api/um/v1`). |
+
+### Auth (`/api/um/v1/auth`)
+
+| Method | Path               | Auth | Description                                   |
+|--------|--------------------|------|-----------------------------------------------|
+| POST   | `/login`           | No   | Login and get token                           |
+| GET    | `/keep-alive`      | Yes  | Refresh token                                 |
+| GET    | `/system`          | Yes  | Get current system                            |
+| POST   | `/verify-password` | Yes  | Verify user password                          |
+| POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s)   |
+| POST   | `/exchange`        | No   | Exchange SSO ticket for a new access token    |
+| GET    | `/sessions`        | Yes  | List own active sessions (all devices)        |
+| DELETE | `/sessions`        | Yes  | Sign out everywhere else (keep current)       |
+| DELETE | `/sessions/:id`    | Yes  | Revoke a specific own session                 |
+| POST   | `/logout`          | Yes  | Logout and end session                       |
+
+### User (`/api/um/v1/user`)
+
+| Method | Path                  | Auth | Role                   | Description          |
+|--------|-----------------------|------|------------------------|----------------------|
+| GET    | `/info`               | Yes  | Any                    | Get own user info    |
+| PUT    | `/info`               | Yes  | Any                    | Update own user info |
+| PUT    | `/change-password`    | Yes  | Any                    | Change own password  |
+| GET    | `/`                   | Yes  | SUPER, ADMIN, MANAGER  | List users           |
+| POST   | `/`                   | Yes  | SUPER, ADMIN           | Create user          |
+| GET    | `/:id`                | Yes  | SUPER, ADMIN, MANAGER  | Get user by ID       |
+| DELETE | `/:id`                | Yes  | SUPER, ADMIN           | Delete user          |
+| PUT    | `/:id`                | Yes  | SUPER, ADMIN           | Update user          |
+| PATCH  | `/:id/status`         | Yes  | SUPER, ADMIN           | Update user status   |
+| PATCH  | `/:id/role`           | Yes  | SUPER, ADMIN           | Update user role     |
+| PATCH  | `/:id/set-password`   | Yes  | SUPER, ADMIN           | Set user password    |
+| POST   | `/:id/unlock`         | Yes  | SUPER, ADMIN           | Unlock locked user   |
+
+#### Role hierarchy
+
+| Caller   | Can create targets | Can change role to       | Notes                                    |
+|----------|--------------------|--------------------------|------------------------------------------|
+| SUPER    | ADMIN, MANAGER, USER (any `clientId`); SUPER only when `clientId=000` | ADMIN, MANAGER, USER, SUPER (target must be in `000`) | SUPER is hidden from UI dropdowns        |
+| ADMIN    | MANAGER, USER (must share `clientId`) | MANAGER, USER           | Cannot touch other ADMINs or SUPERs      |
+| MANAGER  | —                  | —                        | Read-only: list + get user in own tenant |
+| USER     | —                  | —                        | Self-service only                        |
+
+### System (`/api/um/v1/system`)
+
+| Method | Path   | Auth | Role  | Description       |
+|--------|--------|------|-------|-------------------|
+| GET    | `/`    | Yes  | SUPER | List systems      |
+| POST   | `/`    | Yes  | SUPER | Create system     |
+| GET    | `/:id` | Yes  | SUPER | Get system by ID  |
+| DELETE | `/:id` | Yes  | SUPER | Delete system     |
+| PUT    | `/:id` | Yes  | SUPER | Update system     |
+
+## Error Codes
+
+All error responses follow the format:
+
+```json
+{
+  "code": "UM-XXX-YYY",
+  "message": "description"
+}
+```
+
+| Code         | HTTP Status | Description              |
+|--------------|-------------|--------------------------|
+| UM-401-001   | 401         | Missing auth header      |
+| UM-401-002   | 401         | Token invalid            |
+| UM-401-003   | 401         | Session invalid          |
+| UM-401-004   | 401         | Wrong credentials        |
+| UM-400-001   | 400         | Bad request              |
+| UM-400-002   | 400         | Wrong password           |
+| UM-400-003   | 400         | Invalid client ID        |
+| UM-400-004   | 400         | Invalid role             |
+| UM-400-005   | 400         | Cannot delete self       |
+| UM-403-001   | 403         | Forbidden                |
+| UM-403-002   | 403         | No permission            |
+| UM-403-003   | 403         | Invalid role permission  |
+| UM-409-001   | 409         | Username taken           |
+| UM-404-001   | 404         | Not found                |
+| UM-429-001   | 429         | Rate limited / locked    |
+| UM-500-001   | 500         | Internal server error    |
+| UM-500-002   | 500         | Token generation failed  |
+
+## Prerequisites
+
+- [Go](https://go.dev) 1.26 or newer
+- [MongoDB](https://www.mongodb.com) 5.0+ (local or remote)
+- [Redis](https://redis.io) 6.0+ (local or remote)
+- Optional: [nodemon](https://www.npmjs.com/package/nodemon) for live-reload during development
+
+## Setup
+
+1. Create a `.env` file in the project root with the following variables:
+
+```env
+PORT=8585
+MONGO_HOST=localhost:27017
+MONGO_UM_DB_NAME=your_db_name
+REDIS_HOST=localhost:6379
+SECRET_KEY=your_secret_key
+```
+
+| Variable                 | Description                                                                                     | Required | Default |
+|--------------------------|-------------------------------------------------------------------------------------------------|----------|---------|
+| `PORT`                   | HTTP port to listen on. Must be a valid TCP port (`1-65535`)                                    | Yes      | —       |
+| `MONGO_HOST`             | MongoDB connection target. Supported formats: `host:port`, `mongodb://...`, `mongodb+srv://...` | Yes      | —       |
+| `MONGO_UM_DB_NAME`       | MongoDB database name                                                                           | Yes      | —       |
+| `REDIS_HOST`             | Redis connection target. Supported formats: `host:port`, `redis://...`, `rediss://...`         | Yes      | —       |
+| `SECRET_KEY`             | Secret key used to sign JWT tokens                                                              | Yes      | —       |
+| `LOGIN_LOCKOUT_ENABLED`  | Turn on per-username account lockout (`1`/`true`/`yes`/`on` to enable, anything else disables). | No       | off     |
+
+> **Important:** The application validates required startup config before opening database connections or starting the HTTP server. Missing or malformed `PORT`, `MONGO_HOST`, `MONGO_UM_DB_NAME`, `REDIS_HOST`, or `SECRET_KEY` will cause startup to fail fast.
+
+Examples:
+
+```env
+# Local host:port style
+MONGO_HOST=localhost:27017
+REDIS_HOST=localhost:6379
+
+# URL style
+MONGO_HOST=mongodb://localhost:27017
+REDIS_HOST=redis://localhost:6379/0
+```
+
+## Run
+
+```bash
+# Download dependencies
+go mod download
+
+# Run the application
+go run main.go
+
+# Run with nodemon (auto-reload)
+nodemon --exec go run main.go --signal SIGTERM
+```
+
+The server listens on `http://localhost:<PORT>` (default `8585`). All endpoints are mounted under `/api/um/v1`.
+
+Login behavior notes:
+
+- `/auth/login` validates that the requested `system` exists for the user's tenant before issuing a token.
+- Disabled accounts still return `401`, and failed attempts participate in login lockout when `LOGIN_LOCKOUT_ENABLED` is enabled.
+
+## Session & authorization semantics
+
+- **Access tokens live 24 h**, but authorization is not decided from the JWT alone.
+- Every authenticated request passes through `RequireAuthenticated` (JWT signature + expiry) → `RequireSession` (Redis session lookup + MongoDB user load + `ACTIVE` status check) → `RequireAuthorization` (role gate). `RequireSession` overwrites the `role` and `clientId` in the request context with the values currently in MongoDB, so a JWT minted before a demotion no longer confers the old privileges on the next request.
+- A deactivated user (`status != ACTIVE`) receives `UM-401-002 token invalid` on their next request, even if their JWT and Redis session are still technically valid.
+- The following operations wipe the target user's sessions from Redis on success — any stolen or stale access token for that user stops authenticating immediately:
+  - `PUT /user/change-password` (keeps the caller's current session, revokes every other)
+  - `PATCH /user/{id}/set-password` (admin reset — revokes every session)
+  - `PATCH /user/{id}/role`
+  - `PATCH /user/{id}/status`
+- Users can proactively sign themselves out of other devices with `DELETE /auth/sessions` or revoke a specific device via `DELETE /auth/sessions/{id}`.
+
+## Quick Test
+
+```bash
+# Login
+curl -X POST http://localhost:8585/api/um/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"password","system":"UM"}'
+
+# Use the returned token
+curl http://localhost:8585/api/um/v1/user/info \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+## SSO Handoff
+
+Other front-ends that already authenticate against this API (e.g. `dpharm.web.app`) can send their user to the UM profile page without re-login:
+
+```bash
+# 1. From the already-logged-in front-end, request a one-time ticket (TTL 60s)
+curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
+  -H "Authorization: Bearer <current_access_token>"
+# → { "ticket": "<uuid>", "expiresIn": 60 }
+
+# 2. Redirect the browser to um-web's /sso handler, which will exchange the
+#    ticket for a fresh access token and drop the user on /profile
+window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}&return=/profile`;
+```
+
+Tickets are one-shot — `POST /auth/exchange` deletes them on first use and returns `UM-401-002` on replay or after the 60-second TTL expires.
+
+## Project Structure
+
+```
+um-api/
+├── app/
+│   ├── core/
+│   │   ├── config/      # Application configuration
+│   │   ├── constant/    # Role and status constants
+│   │   ├── errs/        # Error codes and response helpers
+│   │   └── utils/       # Utility functions (password hashing, context)
+│   ├── domain/
+│   │   ├── model/       # Data models (User, System)
+│   │   ├── repository/  # Database access layer (MongoDB, Redis)
+│   │   └── usecase/     # Business logic handlers
+│   ├── featues/
+│   │   ├── api/         # Route definitions
+│   │   └── request/     # Request DTOs
+│   └── init.go          # Application bootstrap
+├── db/                  # Database connection setup
+├── middlewares/          # Auth, CORS, recovery, routing middlewares
+├── main.go              # Entry point
+├── go.mod
+└── go.sum
+```
+
+## Related
+
+- Web console: [`um-web`](../um-web) — Next.js 16 + shadcn/ui frontend that consumes this API

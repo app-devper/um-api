@@ -4,18 +4,19 @@ type User struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Phone     string `json:"phone"`
-	Email     string `json:"email"`
-	Username  string `json:"username" binding:"required"`
-	Password  string `json:"password" binding:"required"`
-	ClientId  string `json:"clientId" binding:"required"`
+	Email     string `json:"email" binding:"omitempty,email"`
+	Username  string `json:"username" binding:"required,min=3,max=50"`
+	Password  string `json:"password" binding:"required,min=8"`
+	ClientId  string `json:"clientId" binding:"required,len=3"`
+	Role      string `json:"role"`
 	CreatedBy string
 }
 
 type UpdateUser struct {
-	FirstName string `json:"firstName" binding:"required"`
-	LastName  string `json:"lastName" binding:"required"`
+	FirstName string `json:"firstName" binding:"required,min=1"`
+	LastName  string `json:"lastName" binding:"required,min=1"`
 	Phone     string `json:"phone"`
-	Email     string `json:"email"`
+	Email     string `json:"email" binding:"omitempty,email"`
 	UpdatedBy string
 }
 
@@ -31,11 +32,12 @@ type UpdateStatus struct {
 
 type ChangePassword struct {
 	OldPassword string `json:"oldPassword" binding:"required"`
-	NewPassword string `json:"newPassword" binding:"required"`
+	NewPassword string `json:"newPassword" binding:"required,min=8"`
 }
 
 type SetPassword struct {
-	Password string `json:"password" binding:"required"`
+	Password  string `json:"password" binding:"required,min=8"`
+	UpdatedBy string
 }
 
 type VerifyPassword struct {
