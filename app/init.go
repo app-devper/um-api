@@ -33,6 +33,8 @@ func (app Routes) StartGin() {
 		logrus.Fatal(err)
 	}
 
+	r.Use(middlewares.NewGatewayHost(cfg.GatewayHosts))
+
 	resource, err := db.InitResource(cfg)
 	if err != nil {
 		logrus.Fatal(err)
