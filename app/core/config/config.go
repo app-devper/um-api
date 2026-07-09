@@ -21,6 +21,7 @@ type AppConfig struct {
 	MongoUMDBName  string
 	RedisHost      string
 	SecretKey      string
+	GatewayHosts   string
 	LockoutEnabled bool
 }
 
@@ -33,6 +34,7 @@ func LoadAppConfig() (*AppConfig, error) {
 		MongoUMDBName:  strings.TrimSpace(os.Getenv("MONGO_UM_DB_NAME")),
 		RedisHost:      strings.TrimSpace(os.Getenv("REDIS_HOST")),
 		SecretKey:      strings.TrimSpace(os.Getenv("SECRET_KEY")),
+		GatewayHosts:   strings.TrimSpace(os.Getenv("GATEWAY_HOSTS")),
 		LockoutEnabled: LoginLockoutEnabled(),
 	}
 	if err := cfg.Validate(); err != nil {
