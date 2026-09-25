@@ -25,6 +25,8 @@ User management (UM) is defined as the effective management of users giving them
 
 Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openapi.yaml). You can view it with [Swagger Editor](https://editor.swagger.io) or any OpenAPI-compatible tool.
 
+Domain language and decisions: [Identity context](./CONTEXT.md), [Architecture notes](./docs/ARCHITECTURE-NOTES.md), and [ADRs](./docs/adr/). The [KMP integration map](https://github.com/app-devper/pharmacy-app-kmp/blob/develop/docs/INTEGRATION-CONTRACTS.md) shows how this API connects to the pharmacy client and API.
+
 ## API Endpoints
 
 ### Health
