@@ -31,12 +31,13 @@ func newChecker(store Store) (*Checker, *clock) {
 	return checker, c
 }
 
-func TestCheckAcceptsLiveSessionForTheSystem(t *testing.T) {
+func TestCheckReturnsLiveSessionForTheSystem(t *testing.T) {
 	store := &fakeStore{session: Session{UserId: "u1", System: "POS"}}
 	checker, _ := newChecker(store)
 
-	if err := checker.Check(context.Background(), "s1", "POS"); err != nil {
-		t.Fatalf("expected live session, got %v", err)
+	session, err := checker.Check(context.Background(), "s1", "POS")
+	if err != nil || session.UserId != "u1" {
+		t.Fatalf("expected live session for u1, got %+v err=%v", session, err)
 	}
 }
 
@@ -45,14 +46,14 @@ func TestCheckCachesForAtMostTTL(t *testing.T) {
 	checker, clk := newChecker(store)
 	ctx := context.Background()
 
-	_ = checker.Check(ctx, "s1", "POS")
+	_, _ = checker.Check(ctx, "s1", "POS")
 	clk.t = clk.t.Add(DefaultTTL - time.Second)
-	_ = checker.Check(ctx, "s1", "POS")
+	_, _ = checker.Check(ctx, "s1", "POS")
 	if store.calls != 1 {
 		t.Fatalf("expected cached answer within TTL, got %d lookups", store.calls)
 	}
 	clk.t = clk.t.Add(time.Second)
-	_ = checker.Check(ctx, "s1", "POS")
+	_, _ = checker.Check(ctx, "s1", "POS")
 	if store.calls != 2 {
 		t.Fatalf("expected a new lookup after %v, got %d", DefaultTTL, store.calls)
 	}
@@ -62,29 +63,29 @@ func TestRevocationTakesEffectAfterCacheExpires(t *testing.T) {
 	store := &fakeStore{session: Session{UserId: "u1", System: "POS"}}
 	checker, clk := newChecker(store)
 	ctx := context.Background()
-	_ = checker.Check(ctx, "s1", "POS")
+	_, _ = checker.Check(ctx, "s1", "POS")
 
 	store.err = ErrSessionRejected
 	clk.t = clk.t.Add(DefaultTTL)
-	if err := checker.Check(ctx, "s1", "POS"); !errors.Is(err, ErrSessionRejected) {
+	if _, err := checker.Check(ctx, "s1", "POS"); !errors.Is(err, ErrSessionRejected) {
 		t.Fatalf("expected ErrSessionRejected, got %v", err)
 	}
 	store.err = nil
-	if err := checker.Check(ctx, "s1", "POS"); err != nil || store.calls != 3 {
+	if _, err := checker.Check(ctx, "s1", "POS"); err != nil || store.calls != 3 {
 		t.Fatalf("a rejection must not be cached: err=%v calls=%d", err, store.calls)
 	}
 }
 
 func TestCheckRejectsSessionForAnotherSystem(t *testing.T) {
 	checker, _ := newChecker(&fakeStore{session: Session{UserId: "u1", System: "PHARMACY"}})
-	if err := checker.Check(context.Background(), "s1", "POS"); !errors.Is(err, ErrSessionRejected) {
+	if _, err := checker.Check(context.Background(), "s1", "POS"); !errors.Is(err, ErrSessionRejected) {
 		t.Fatalf("expected ErrSessionRejected, got %v", err)
 	}
 }
 
 func TestCheckAcceptsLegacySessionWithoutSystem(t *testing.T) {
 	checker, _ := newChecker(&fakeStore{session: Session{UserId: "u1"}})
-	if err := checker.Check(context.Background(), "s1", "POS"); err != nil {
+	if _, err := checker.Check(context.Background(), "s1", "POS"); err != nil {
 		t.Fatalf("expected legacy session to pass, got %v", err)
 	}
 }
@@ -92,7 +93,7 @@ func TestCheckAcceptsLegacySessionWithoutSystem(t *testing.T) {
 func TestCheckRejectsEmptySessionID(t *testing.T) {
 	store := &fakeStore{session: Session{UserId: "u1"}}
 	checker, _ := newChecker(store)
-	if err := checker.Check(context.Background(), "", "POS"); !errors.Is(err, ErrSessionRejected) || store.calls != 0 {
+	if _, err := checker.Check(context.Background(), "", "POS"); !errors.Is(err, ErrSessionRejected) || store.calls != 0 {
 		t.Fatalf("expected rejection without lookup, got %v (%d calls)", err, store.calls)
 	}
 }
@@ -101,16 +102,58 @@ func TestCachedAnswerCoversShortOutageOnly(t *testing.T) {
 	store := &fakeStore{session: Session{UserId: "u1", System: "POS"}}
 	checker, clk := newChecker(store)
 	ctx := context.Background()
-	_ = checker.Check(ctx, "s1", "POS")
+	_, _ = checker.Check(ctx, "s1", "POS")
 
 	store.err = ErrUnavailable
 	clk.t = clk.t.Add(DefaultTTL / 2)
-	if err := checker.Check(ctx, "s1", "POS"); err != nil {
+	if _, err := checker.Check(ctx, "s1", "POS"); err != nil {
 		t.Fatalf("expected cached answer during short outage, got %v", err)
 	}
 	clk.t = clk.t.Add(DefaultTTL)
-	if err := checker.Check(ctx, "s1", "POS"); !errors.Is(err, ErrUnavailable) {
+	session, err := checker.Check(ctx, "s1", "POS")
+	if !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("expected ErrUnavailable once the cache expires, got %v", err)
+	}
+	if session.UserId != "u1" {
+		t.Fatalf("expected the last confirmed session alongside ErrUnavailable, got %+v", session)
+	}
+}
+
+func TestOutageWithoutPriorConfirmationReturnsNoSession(t *testing.T) {
+	checker, _ := newChecker(&fakeStore{err: ErrUnavailable})
+	session, err := checker.Check(context.Background(), "s1", "POS")
+	if !errors.Is(err, ErrUnavailable) || session != (Session{}) {
+		t.Fatalf("expected ErrUnavailable and no session, got %+v err=%v", session, err)
+	}
+}
+
+func TestStaleSessionIsNotReturnedPastTokenLifetime(t *testing.T) {
+	store := &fakeStore{session: Session{UserId: "u1", System: "POS"}}
+	checker, clk := newChecker(store)
+	ctx := context.Background()
+	_, _ = checker.Check(ctx, "s1", "POS")
+
+	store.err = ErrUnavailable
+	clk.t = clk.t.Add(staleLimit)
+	if session, err := checker.Check(ctx, "s1", "POS"); !errors.Is(err, ErrUnavailable) || session != (Session{}) {
+		t.Fatalf("expected no session past %v, got %+v err=%v", staleLimit, session, err)
+	}
+}
+
+func TestRejectedSessionIsNotReturned(t *testing.T) {
+	store := &fakeStore{session: Session{UserId: "u1", System: "POS"}}
+	checker, clk := newChecker(store)
+	ctx := context.Background()
+	_, _ = checker.Check(ctx, "s1", "POS")
+
+	store.err = ErrSessionRejected
+	clk.t = clk.t.Add(DefaultTTL)
+	if session, err := checker.Check(ctx, "s1", "POS"); !errors.Is(err, ErrSessionRejected) || session != (Session{}) {
+		t.Fatalf("expected rejection with no session, got %+v err=%v", session, err)
+	}
+	store.err = ErrUnavailable
+	if session, _ := checker.Check(ctx, "s1", "POS"); session != (Session{}) {
+		t.Fatalf("a rejected session must not be served during a later outage, got %+v", session)
 	}
 }
 
@@ -121,9 +164,36 @@ func TestDisabledCheckerAllowsEverything(t *testing.T) {
 		t.Fatalf("New(\"\"): %v", err)
 	}
 	for _, c := range []*Checker{nilChecker, disabled, NewChecker(nil)} {
-		if c.Enabled() || c.Check(context.Background(), "", "") != nil {
+		if _, err := c.Check(context.Background(), "", ""); c.Enabled() || err != nil {
 			t.Fatal("expected a disabled checker to allow everything")
 		}
+	}
+}
+
+func TestAuthorizeAppliesTheOutagePolicy(t *testing.T) {
+	store := &fakeStore{session: Session{UserId: "u1", System: "POS"}}
+	checker, clk := newChecker(store)
+	ctx := context.Background()
+
+	if s, err := checker.Authorize(ctx, "s1", "POS", http.MethodPost); err != nil || s.UserId != "u1" {
+		t.Fatalf("live session: got %+v err=%v", s, err)
+	}
+
+	store.err = ErrUnavailable
+	clk.t = clk.t.Add(DefaultTTL)
+	if s, err := checker.Authorize(ctx, "s1", "POS", http.MethodGet); err != nil || s.UserId != "u1" {
+		t.Fatalf("outage GET with a known session should continue, got %+v err=%v", s, err)
+	}
+	if _, err := checker.Authorize(ctx, "s1", "POS", http.MethodPost); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("outage POST must be refused, got %v", err)
+	}
+	if _, err := checker.Authorize(ctx, "never-seen", "POS", http.MethodGet); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("outage GET for an unknown session must be refused, got %v", err)
+	}
+
+	store.err = ErrSessionRejected
+	if _, err := checker.Authorize(ctx, "s1", "POS", http.MethodGet); !errors.Is(err, ErrSessionRejected) {
+		t.Fatalf("a revoked session must be refused, got %v", err)
 	}
 }
 

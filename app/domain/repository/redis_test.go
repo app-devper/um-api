@@ -240,8 +240,8 @@ func TestSessionStorageContract(t *testing.T) {
 	}
 
 	checker := sessionclient.NewChecker(reader)
-	if err := checker.Check(ctx, id, "PHARMACY"); err != nil {
-		t.Fatalf("live session rejected: %v", err)
+	if session, err := checker.Check(ctx, id, "PHARMACY"); err != nil || session.UserId != "u1" {
+		t.Fatalf("live session rejected: %+v err=%v", session, err)
 	}
 	if err := store.RemoveSessionById(id); err != nil {
 		t.Fatalf("remove: %v", err)

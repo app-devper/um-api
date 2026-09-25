@@ -30,6 +30,10 @@ const KeyPrefix = "session:"
 // the store again.
 const DefaultTTL = 30 * time.Second
 
+// staleLimit bounds how long a confirmed session is remembered for use during
+// an outage; UM access tokens live 24 hours.
+const staleLimit = 24 * time.Hour
+
 // lookupTimeout bounds one store lookup, including dial, so an outage turns
 // into a prompt ErrUnavailable instead of a hung request.
 const lookupTimeout = time.Second
@@ -102,18 +106,23 @@ func (s *RedisStore) Session(ctx context.Context, sessionID string) (Session, er
 }
 
 // Checker confirms sessions with a per-session cache. A nil *Checker, or one
-// built without a store, is disabled: Check always succeeds.
+// built without a store, is disabled: Check always succeeds with a zero Session.
 type Checker struct {
 	store Store
 	ttl   time.Duration
 	now   func() time.Time
 
 	mu      sync.Mutex
-	entries map[string]time.Time
+	entries map[string]entry
+}
+
+type entry struct {
+	session   Session
+	checkedAt time.Time
 }
 
 func NewChecker(store Store) *Checker {
-	return &Checker{store: store, ttl: DefaultTTL, now: time.Now, entries: map[string]time.Time{}}
+	return &Checker{store: store, ttl: DefaultTTL, now: time.Now, entries: map[string]entry{}}
 }
 
 // New builds a Checker for UM's Redis at hostOrURL. An empty hostOrURL gives
@@ -135,21 +144,26 @@ func (c *Checker) Enabled() bool {
 }
 
 // Check confirms that sessionID, taken from a token the caller has already
-// verified, is live in UM and was issued for system. It returns nil,
-// ErrSessionRejected, or ErrUnavailable (possibly wrapped).
-func (c *Checker) Check(ctx context.Context, sessionID, system string) error {
+// verified, is live in UM and was issued for system, and returns the session.
+// The error is nil, ErrSessionRejected, or ErrUnavailable (possibly wrapped).
+//
+// With ErrUnavailable, the returned Session is the last one confirmed for
+// sessionID, if any (zero otherwise), so a caller applying an outage policy
+// such as ReadOnlyDuringOutage can still identify the user. Never treat it as
+// confirmation for a write.
+func (c *Checker) Check(ctx context.Context, sessionID, system string) (Session, error) {
 	if !c.Enabled() {
-		return nil
+		return Session{}, nil
 	}
 	if sessionID == "" {
-		return ErrSessionRejected
+		return Session{}, ErrSessionRejected
 	}
 	now := c.now()
 	c.mu.Lock()
-	checkedAt, ok := c.entries[sessionID]
+	cached, ok := c.entries[sessionID]
 	c.mu.Unlock()
-	if ok && now.Sub(checkedAt) < c.ttl {
-		return nil
+	if ok && now.Sub(cached.checkedAt) < c.ttl {
+		return cached.session, nil
 	}
 
 	session, err := c.store.Session(ctx, sessionID)
@@ -157,30 +171,49 @@ func (c *Checker) Check(ctx context.Context, sessionID, system string) error {
 	if err == nil && session.System != "" && session.System != system {
 		err = fmt.Errorf("%w: session was issued for system %q", ErrSessionRejected, session.System)
 	}
-	if err != nil {
-		if !errors.Is(err, ErrUnavailable) {
-			c.forget(sessionID)
+	if errors.Is(err, ErrUnavailable) {
+		if ok && now.Sub(cached.checkedAt) < staleLimit {
+			return cached.session, err
 		}
-		return err
+		return Session{}, err
+	}
+	if err != nil {
+		c.forget(sessionID)
+		return Session{}, err
 	}
 
 	c.mu.Lock()
-	c.entries[sessionID] = now
+	c.entries[sessionID] = entry{session: session, checkedAt: now}
 	if len(c.entries) > 10000 {
-		for id, at := range c.entries {
-			if now.Sub(at) >= c.ttl {
+		for id, e := range c.entries {
+			if now.Sub(e.checkedAt) >= staleLimit {
 				delete(c.entries, id)
 			}
 		}
 	}
 	c.mu.Unlock()
-	return nil
+	return session, nil
 }
 
 func (c *Checker) forget(sessionID string) {
 	c.mu.Lock()
 	delete(c.entries, sessionID)
 	c.mu.Unlock()
+}
+
+// Authorize applies Check with the default outage policy for a request with
+// the given HTTP method: while the store is unavailable, a safe method may
+// continue with the last session confirmed for this token, and anything else
+// gets ErrUnavailable. Map ErrSessionRejected to 401 and ErrUnavailable to 503.
+func (c *Checker) Authorize(ctx context.Context, sessionID, system, method string) (Session, error) {
+	session, err := c.Check(ctx, sessionID, system)
+	if errors.Is(err, ErrUnavailable) && ReadOnlyDuringOutage(method) && session.UserId != "" {
+		return session, nil
+	}
+	if err != nil {
+		return Session{}, err
+	}
+	return session, nil
 }
 
 // ReadOnlyDuringOutage is the default outage policy: while the store is
