@@ -25,6 +25,8 @@ User management (UM) is defined as the effective management of users giving them
 
 Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openapi.yaml). You can view it with [Swagger Editor](https://editor.swagger.io) or any OpenAPI-compatible tool.
 
+Domain language and decisions: [Identity context](./CONTEXT.md), [Architecture notes](./docs/ARCHITECTURE-NOTES.md), and [ADRs](./docs/adr/). The [KMP integration map](https://github.com/app-devper/pharmacy-app-kmp/blob/develop/docs/INTEGRATION-CONTRACTS.md) shows how this API connects to the pharmacy client and API.
+
 ## API Endpoints
 
 ### Health
@@ -39,6 +41,7 @@ Full OpenAPI 3.0 specification is available at [`docs/openapi.yaml`](docs/openap
 |--------|--------------------|------|-----------------------------------------------|
 | POST   | `/login`           | No   | Login and get token                           |
 | GET    | `/keep-alive`      | Yes  | Refresh token                                 |
+| GET    | `/verify`          | Yes  | Verify the caller's live session (for services) |
 | GET    | `/system`          | Yes  | Get current system                            |
 | POST   | `/verify-password` | Yes  | Verify user password                          |
 | POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s)   |
@@ -180,13 +183,16 @@ Login behavior notes:
 ## Session & authorization semantics
 
 - **Access tokens live 24 h**, but authorization is not decided from the JWT alone.
-- Every authenticated request passes through `RequireAuthenticated` (JWT signature + expiry) → `RequireSession` (Redis session lookup + MongoDB user load + `ACTIVE` status check) → `RequireAuthorization` (role gate). `RequireSession` overwrites the `role` and `clientId` in the request context with the values currently in MongoDB, so a JWT minted before a demotion no longer confers the old privileges on the next request.
+- Every route except `/auth/login` and `/auth/exchange` sits behind `RequireSession`, which asks the [Session module](app/domain/session/session.go) to verify the token: JWT signature and expiry, the Redis session (whose recorded system must match the token), the MongoDB user, and `ACTIVE` status. The request then carries the user's current `role` and `clientId` from MongoDB, so a JWT minted before a demotion no longer confers the old privileges on the next request.
+- Role rules for `/user/*` live in the [user administration module](app/domain/useradmin/useradmin.go); `/system/*` is SUPER only.
 - A deactivated user (`status != ACTIVE`) receives `UM-401-002 token invalid` on their next request, even if their JWT and Redis session are still technically valid.
 - The following operations wipe the target user's sessions from Redis on success — any stolen or stale access token for that user stops authenticating immediately:
   - `PUT /user/change-password` (keeps the caller's current session, revokes every other)
   - `PATCH /user/{id}/set-password` (admin reset — revokes every session)
   - `PATCH /user/{id}/role`
   - `PATCH /user/{id}/status`
+  - `DELETE /user/{id}`
+- Other services rely on this: they verify tokens with `GET /auth/verify` ([ADR-0001](docs/adr/0001-service-session-verification.md)), or, like the pharmacy API, read `session:<jti>` from Redis ([ADR-0003](docs/adr/0003-pharmacy-reads-um-sessions-from-redis.md)) and trust the token's claims while that session exists. Any new operation that changes a user's role, client, or status must revoke their sessions.
 - Users can proactively sign themselves out of other devices with `DELETE /auth/sessions` or revoke a specific device via `DELETE /auth/sessions/{id}`.
 
 ## Quick Test
@@ -232,13 +238,15 @@ um-api/
 │   ├── domain/
 │   │   ├── model/       # Data models (User, System)
 │   │   ├── repository/  # Database access layer (MongoDB, Redis)
-│   │   └── usecase/     # Business logic handlers
+│   │   ├── session/     # Session module: issue, verify, renew access tokens
+│   │   ├── useradmin/   # User administration policy and session revocation
+│   │   └── usecase/     # Gin handlers (HTTP adapters)
 │   ├── featues/
 │   │   ├── api/         # Route definitions
 │   │   └── request/     # Request DTOs
 │   └── init.go          # Application bootstrap
 ├── db/                  # Database connection setup
-├── middlewares/          # Auth, CORS, recovery, routing middlewares
+├── middlewares/          # CORS, gateway host, rate limit, role gate, recovery
 ├── main.go              # Entry point
 ├── go.mod
 └── go.sum

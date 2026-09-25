@@ -1,13 +1,14 @@
 package usecase
 
 import (
+	"errors"
 	"net/http"
-	"time"
-	"um/app/core/config"
+	"strings"
 	"um/app/core/constant"
 	"um/app/core/errs"
 	"um/app/core/utils"
 	"um/app/domain/repository"
+	"um/app/domain/session"
 	"um/app/featues/request"
 	"um/middlewares"
 
@@ -15,32 +16,32 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func RequireSession(sessionEntity repository.ISession, userEntity repository.IUser) gin.HandlerFunc {
+func RequireSession(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		sessionId := ctx.GetString(middlewares.SessionId)
-		userId, err := sessionEntity.GetSessionById(sessionId)
+		header := ctx.GetHeader("Authorization")
+		token, ok := strings.CutPrefix(header, "Bearer ")
+		if !ok || token == "" {
+			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrMissingAuthHeader, "missing authorization header"))
+			return
+		}
+		principal, err := sessions.Verify(token)
 		if err != nil {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrSessionInvalid, "session invalid"))
+			respondSessionError(ctx, err)
 			return
 		}
-		user, err := userEntity.GetUserById(userId)
-		if err != nil || user == nil {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrSessionInvalid, "session invalid"))
-			return
-		}
-		if user.Status != constant.ACTIVE {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
-			return
-		}
-		ctx.Set(middlewares.UserId, userId)
-		ctx.Set(middlewares.Role, user.Role)
-		ctx.Set(middlewares.ClientId, user.ClientId)
-		logrus.Info("UserId: " + userId)
+		ctx.Set(middlewares.Principal, principal)
+		ctx.Set(middlewares.SessionId, principal.SessionId)
+		ctx.Set(middlewares.UserId, principal.UserId)
+		ctx.Set(middlewares.Role, principal.Role)
+		ctx.Set(middlewares.System, principal.System)
+		ctx.Set(middlewares.ClientId, principal.ClientId)
+		logrus.Infof("SessionId: %s UserId: %s Role: %s System: %s ClientId: %s",
+			principal.SessionId, principal.UserId, principal.Role, principal.System, principal.ClientId)
 		ctx.Next()
 	}
 }
 
-func Login(secretKey string, userEntity repository.IUser, sessionEntity repository.ISession, systemEntity repository.ISystem, loginGuard repository.ILoginGuard) gin.HandlerFunc {
+func Login(sessions *session.Manager, userEntity repository.IUser, systemEntity repository.ISystem, loginGuard repository.ILoginGuard) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.Login{}
 		if err := ctx.ShouldBind(&req); err != nil {
@@ -84,86 +85,51 @@ func Login(secretKey string, userEntity repository.IUser, sessionEntity reposito
 
 		_ = loginGuard.Reset(username)
 
-		expireDate := time.Now().Add(config.AccessTokenTime)
-
-		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime, repository.SessionMetadata{
-			UserAgent: ctx.Request.UserAgent(),
-			IPAddress: ctx.ClientIP(),
-			System:    req.System,
-		})
+		token, err := sessions.Issue(user, req.System, sessionMetadata(ctx))
 		if err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			respondSessionError(ctx, err)
 			return
 		}
-
-		param := &middlewares.TokenParam{
-			SessionId:      sessionId,
-			Role:           user.Role,
-			System:         req.System,
-			ClientId:       user.ClientId,
-			ExpirationTime: expireDate,
-		}
-		token, err := middlewares.GenerateJwtToken(secretKey, param)
-		if err != nil {
-			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
-				logrus.Error(removeErr)
-			}
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
-			return
-		}
-		result := gin.H{
-			"accessToken": token,
-		}
-		ctx.JSON(http.StatusOK, result)
+		ctx.JSON(http.StatusOK, gin.H{"accessToken": token})
 	}
 }
 
-func KeepAlive(secretKey string, userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
+func KeepAlive(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		sessionId := ctx.GetString(middlewares.SessionId)
-		userId := ctx.GetString(middlewares.UserId)
-
-		user, err := userEntity.GetUserById(userId)
-		if err != nil {
-			logrus.Error(err)
+		principal, ok := ctx.Value(middlewares.Principal).(*session.Principal)
+		if !ok {
+			logrus.Error("KeepAlive: no session principal; route is missing RequireSession")
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
-
-		if user.Status != constant.ACTIVE {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
+		token, err := sessions.Renew(principal)
+		if err != nil {
+			respondSessionError(ctx, err)
 			return
 		}
+		ctx.JSON(http.StatusOK, gin.H{"accessToken": token})
+	}
+}
 
-		expireDate := time.Now().Add(config.AccessTokenTime)
-		err = sessionEntity.UpdateSessionExpireById(sessionId, config.AccessTokenTime)
-		if err != nil {
-			logrus.Error(err)
+// VerifySession answers ADR-0001: another service forwards a user's token and
+// gets back the live Session behind it. RequireSession has already done the
+// verification; this only reports it and forbids caching by intermediaries.
+func VerifySession() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		principal, ok := ctx.Value(middlewares.Principal).(*session.Principal)
+		if !ok {
+			logrus.Error("VerifySession: no session principal; route is missing RequireSession")
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 			return
 		}
-
-		system := ctx.GetString(middlewares.System)
-		param := &middlewares.TokenParam{
-			SessionId:      sessionId,
-			Role:           user.Role,
-			System:         system,
-			ClientId:       user.ClientId,
-			ExpirationTime: expireDate,
-		}
-		token, err := middlewares.GenerateJwtToken(secretKey, param)
-		if err != nil {
-			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
-				logrus.Error(removeErr)
-			}
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
-			return
-		}
-		result := gin.H{
-			"accessToken": token,
-		}
-		ctx.JSON(http.StatusOK, result)
+		ctx.Header("Cache-Control", "no-store")
+		ctx.JSON(http.StatusOK, gin.H{
+			"sessionId": principal.SessionId,
+			"userId":    principal.UserId,
+			"role":      principal.Role,
+			"system":    principal.System,
+			"clientId":  principal.ClientId,
+		})
 	}
 }
 
@@ -215,7 +181,7 @@ func CreateSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IUse
 	}
 }
 
-func ExchangeSSOTicket(secretKey string, ssoEntity repository.ISSOTicket, userEntity repository.IUser, sessionEntity repository.ISession) gin.HandlerFunc {
+func ExchangeSSOTicket(sessions *session.Manager, ssoEntity repository.ISSOTicket, userEntity repository.IUser) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.ExchangeTicket{}
 		if err := ctx.ShouldBind(&req); err != nil {
@@ -239,31 +205,9 @@ func ExchangeSSOTicket(secretKey string, ssoEntity repository.ISSOTicket, userEn
 			return
 		}
 
-		expireDate := time.Now().Add(config.AccessTokenTime)
-		sessionId, err := sessionEntity.CreateSession(user.Id.Hex(), config.AccessTokenTime, repository.SessionMetadata{
-			UserAgent: ctx.Request.UserAgent(),
-			IPAddress: ctx.ClientIP(),
-			System:    payload.System,
-		})
+		token, err := sessions.Issue(user, payload.System, sessionMetadata(ctx))
 		if err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
-			return
-		}
-
-		param := &middlewares.TokenParam{
-			SessionId:      sessionId,
-			Role:           user.Role,
-			System:         payload.System,
-			ClientId:       user.ClientId,
-			ExpirationTime: expireDate,
-		}
-		token, err := middlewares.GenerateJwtToken(secretKey, param)
-		if err != nil {
-			if removeErr := sessionEntity.RemoveSessionById(sessionId); removeErr != nil {
-				logrus.Error(removeErr)
-			}
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
+			respondSessionError(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"accessToken": token})
@@ -295,12 +239,12 @@ func RevokeSession(sessionEntity repository.ISession) gin.HandlerFunc {
 			return
 		}
 
-		targetUserId, err := sessionEntity.GetSessionById(targetId)
+		target, err := sessionEntity.GetSessionById(targetId)
 		if err != nil {
 			errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, "session not found"))
 			return
 		}
-		if targetUserId != userId {
+		if target.UserId != userId {
 			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
 			return
 		}
@@ -352,5 +296,29 @@ func VerifyPassword(userEntity repository.IUser) gin.HandlerFunc {
 			"message": "success",
 		}
 		ctx.JSON(http.StatusOK, result)
+	}
+}
+
+func sessionMetadata(ctx *gin.Context) session.Metadata {
+	return session.Metadata{
+		UserAgent: ctx.Request.UserAgent(),
+		IPAddress: ctx.ClientIP(),
+	}
+}
+
+func respondSessionError(ctx *gin.Context, err error) {
+	switch {
+	case errors.Is(err, session.ErrTokenInvalid), errors.Is(err, session.ErrUserInactive):
+		logrus.Warn(err)
+		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
+	case errors.Is(err, session.ErrSessionInvalid):
+		logrus.Warn(err)
+		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrSessionInvalid, "session invalid"))
+	case errors.Is(err, session.ErrTokenGenFailed):
+		logrus.Error(err)
+		errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrTokenGenFailed, "failed to generate token"))
+	default:
+		logrus.Error(err)
+		errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
 	}
 }
