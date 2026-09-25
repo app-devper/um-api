@@ -1,11 +1,13 @@
 package repository
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"testing"
 	"time"
 	"um/db"
+
+	"github.com/app-devper/um-api/sessionclient"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
@@ -213,25 +215,38 @@ func contains(items []string, want string) bool {
 	return false
 }
 
-// ADR-0003: pharmacy-api reads sessions straight from Redis. Changing this
-// layout breaks it.
+// ADR-0003: other services read sessions straight from Redis through the
+// sessionclient module. Read what UM writes with that client, so a change to
+// either side fails here.
 func TestSessionStorageContract(t *testing.T) {
 	res, mr := newRedis(t)
 	store := NewSessionEntity(res)
 	id, _ := store.CreateSession("u1", time.Hour, SessionMetadata{System: "PHARMACY"})
 
-	raw, err := mr.Get("session:" + id)
+	rdb, err := sessionclient.NewRedisClient(mr.Addr())
 	if err != nil {
-		t.Fatalf("expected session at session:<id>, got %v", err)
+		t.Fatalf("client: %v", err)
 	}
-	var stored map[string]any
-	if err := json.Unmarshal([]byte(raw), &stored); err != nil {
-		t.Fatalf("expected JSON, got %q", raw)
+	defer rdb.Close()
+	reader := sessionclient.NewRedisStore(rdb)
+	ctx := context.Background()
+
+	got, err := reader.Session(ctx, id)
+	if err != nil || got != (sessionclient.Session{UserId: "u1", System: "PHARMACY"}) {
+		t.Fatalf("sessionclient read %+v err=%v", got, err)
 	}
-	if stored["userId"] != "u1" || stored["system"] != "PHARMACY" {
-		t.Fatalf("expected userId and system fields, got %v", stored)
-	}
-	if ttl := mr.TTL("session:" + id); ttl != time.Hour {
+	if ttl := mr.TTL(sessionclient.KeyPrefix + id); ttl != time.Hour {
 		t.Fatalf("expected key to expire with the session, got %v", ttl)
+	}
+
+	checker := sessionclient.NewChecker(reader)
+	if err := checker.Check(ctx, id, "PHARMACY"); err != nil {
+		t.Fatalf("live session rejected: %v", err)
+	}
+	if err := store.RemoveSessionById(id); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	if _, err := reader.Session(ctx, id); !errors.Is(err, sessionclient.ErrSessionRejected) {
+		t.Fatalf("revoked session must read as rejected, got %v", err)
 	}
 }
