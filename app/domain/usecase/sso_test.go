@@ -9,6 +9,7 @@ import (
 	"um/app/core/constant"
 	"um/app/domain/model"
 	"um/app/domain/repository"
+	"um/app/domain/session"
 	"um/middlewares"
 
 	"github.com/gin-gonic/gin"
@@ -144,7 +145,7 @@ func TestExchangeSSOTicketActiveUserMintsFreshToken(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket("test-secret", ssoRepo, userRepo, sessionRepo)(c)
+	ExchangeSSOTicket(session.NewManager("test-secret", sessionRepo, userRepo), ssoRepo, userRepo)(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -192,7 +193,7 @@ func TestExchangeSSOTicketRejectsInactiveUser(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket("test-secret", ssoRepo, userRepo, sessionRepo)(c)
+	ExchangeSSOTicket(session.NewManager("test-secret", sessionRepo, userRepo), ssoRepo, userRepo)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for inactive user, got %d body=%s", w.Code, w.Body.String())

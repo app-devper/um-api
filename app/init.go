@@ -4,7 +4,9 @@ import (
 	"context"
 	"um/app/core/config"
 	"um/app/domain/repository"
+	"um/app/domain/session"
 	"um/app/domain/usecase"
+	"um/app/domain/useradmin"
 	"um/app/featues/api"
 	"um/db"
 	"um/middlewares"
@@ -53,10 +55,14 @@ func (app Routes) StartGin() {
 	systemEntity := repository.NewSystemEntity(resource)
 	loginGuard := repository.NewLoginGuardEntity(resource, cfg.LockoutEnabled)
 	ssoEntity := repository.NewSSOTicketEntity(resource)
+	sessions := session.NewManager(cfg.SecretKey, sessionEntity, userEntity)
+	admin := useradmin.New(userEntity, sessionEntity, systemEntity, loginGuard)
 
-	api.ApplyAuthAPI(publicRoute, cfg.SecretKey, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
-	api.ApplyUserAPI(publicRoute, cfg.SecretKey, userEntity, sessionEntity, systemEntity, loginGuard)
-	api.ApplySystemAPI(publicRoute, cfg.SecretKey, systemEntity, sessionEntity, userEntity)
+	protectedRoute := publicRoute.Group("", usecase.RequireSession(sessions))
+
+	api.ApplyAuthAPI(publicRoute, protectedRoute, sessions, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
+	api.ApplyUserAPI(protectedRoute, userEntity, admin)
+	api.ApplySystemAPI(protectedRoute, systemEntity)
 
 	r.NoRoute(middlewares.NoRoute())
 

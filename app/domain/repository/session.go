@@ -23,6 +23,9 @@ type SessionMetadata struct {
 	System    string
 }
 
+// SessionData is stored as JSON at "session:<sessionId>". pharmacy-api reads
+// this key directly (ADR-0003): the key prefix and the userId/system fields
+// are a cross-service contract.
 type SessionData struct {
 	UserId       string    `json:"userId"`
 	CreatedAt    time.Time `json:"createdAt"`
@@ -50,7 +53,7 @@ type ISession interface {
 	CreateSession(userId string, expiration time.Duration, metadata SessionMetadata) (string, error)
 	UpdateSessionExpireById(sessionId string, expiration time.Duration) error
 	RemoveSessionById(sessionId string) error
-	GetSessionById(sessionId string) (string, error)
+	GetSessionById(sessionId string) (*SessionData, error)
 	ListUserSessions(userId string, currentSessionId string) ([]SessionInfo, error)
 	RevokeOtherSessions(userId string, currentSessionId string) (int, error)
 }
@@ -88,13 +91,9 @@ func (e *sessionEntity) CreateSession(userId string, expiration time.Duration, m
 	return sessionId, nil
 }
 
-func (e *sessionEntity) GetSessionById(sessionId string) (string, error) {
+func (e *sessionEntity) GetSessionById(sessionId string) (*SessionData, error) {
 	logrus.Info("GetSessionById")
-	data, err := e.loadSession(sessionId)
-	if err != nil {
-		return "", err
-	}
-	return data.UserId, nil
+	return e.loadSession(sessionId)
 }
 
 func (e *sessionEntity) UpdateSessionExpireById(sessionId string, expiration time.Duration) error {
