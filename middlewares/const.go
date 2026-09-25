@@ -6,4 +6,5 @@ const (
 	System    = "System"
 	ClientId  = "ClientId"
 	UserId    = "UserId"
+	Principal = "Principal"
 )

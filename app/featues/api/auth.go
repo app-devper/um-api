@@ -3,6 +3,7 @@ package api
 import (
 	"time"
 	"um/app/domain/repository"
+	"um/app/domain/session"
 	"um/app/domain/usecase"
 	"um/middlewares"
 
@@ -10,9 +11,12 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+// ApplyAuthAPI registers login and SSO exchange on the public group and the
+// session-management routes on the protected group.
 func ApplyAuthAPI(
-	app *gin.RouterGroup,
-	secretKey string,
+	public *gin.RouterGroup,
+	protected *gin.RouterGroup,
+	sessions *session.Manager,
 	userEntity repository.IUser,
 	sessionEntity repository.ISession,
 	systemEntity repository.ISystem,
@@ -21,63 +25,27 @@ func ApplyAuthAPI(
 	rdb *redis.Client,
 ) {
 
-	route := app.Group("auth")
+	open := public.Group("auth")
 
-	route.POST("/login",
+	open.POST("/login",
 		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
-		usecase.Login(secretKey, userEntity, sessionEntity, systemEntity, loginGuard),
+		usecase.Login(sessions, userEntity, systemEntity, loginGuard),
 	)
 
-	route.POST("/sso-ticket",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.CreateSSOTicket(ssoEntity, userEntity),
-	)
-
-	route.POST("/exchange",
+	open.POST("/exchange",
 		middlewares.RateLimiter(rdb, 10, 1*time.Minute),
-		usecase.ExchangeSSOTicket(secretKey, ssoEntity, userEntity, sessionEntity),
+		usecase.ExchangeSSOTicket(sessions, ssoEntity, userEntity),
 	)
 
-	route.GET("/keep-alive",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.KeepAlive(secretKey, userEntity, sessionEntity),
-	)
+	route := protected.Group("auth")
 
-	route.GET("/system",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.GetSystem(systemEntity),
-	)
-
-	route.POST("/verify-password",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.VerifyPassword(userEntity),
-	)
-
-	route.POST("/logout",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.Logout(sessionEntity),
-	)
-
-	route.GET("/sessions",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.ListSessions(sessionEntity),
-	)
-
-	route.DELETE("/sessions",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.RevokeOtherSessions(sessionEntity),
-	)
-
-	route.DELETE("/sessions/:id",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		usecase.RevokeSession(sessionEntity),
-	)
+	route.POST("/sso-ticket", usecase.CreateSSOTicket(ssoEntity, userEntity))
+	route.GET("/keep-alive", usecase.KeepAlive(sessions))
+	route.GET("/verify", usecase.VerifySession())
+	route.GET("/system", usecase.GetSystem(systemEntity))
+	route.POST("/verify-password", usecase.VerifyPassword(userEntity))
+	route.POST("/logout", usecase.Logout(sessionEntity))
+	route.GET("/sessions", usecase.ListSessions(sessionEntity))
+	route.DELETE("/sessions", usecase.RevokeOtherSessions(sessionEntity))
+	route.DELETE("/sessions/:id", usecase.RevokeSession(sessionEntity))
 }

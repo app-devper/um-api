@@ -20,6 +20,14 @@ _Avoid_: Client, session
 An active authenticated relationship between a user and a system that can be revoked independently of an access token's expiry.
 _Avoid_: Token
 
+**Principal**:
+The verified caller behind an access token: its session, user, system, and the user's current role and client. Produced only by verifying a token against the live session and user.
+_Avoid_: Claims, token payload
+
+**Actor**:
+The user performing an administrative operation on another user, judged by their current role and client. An actor may only manage users whose role it outranks, within its own client unless it is a super user.
+_Avoid_: Caller, requester
+
 **Role**:
 A user's permission tier, checked against the user's current account state when an operation is authorized.
 _Avoid_: Token claim

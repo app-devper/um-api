@@ -10,48 +10,15 @@ import (
 )
 
 func ApplySystemAPI(
-	app *gin.RouterGroup,
-	secretKey string,
+	protected *gin.RouterGroup,
 	systemEntity repository.ISystem,
-	sessionEntity repository.ISession,
-	userEntity repository.IUser,
 ) {
 
-	route := app.Group("system")
+	route := protected.Group("system", middlewares.RequireAuthorization(constant.SUPER))
 
-	route.GET("",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.GetSystems(systemEntity),
-	)
-
-	route.POST("",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.AddSystem(systemEntity),
-	)
-
-	route.GET("/:id",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.GetSystemById(systemEntity),
-	)
-
-	route.DELETE("/:id",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.DeleteSystemById(systemEntity),
-	)
-
-	route.PUT("/:id",
-		middlewares.RequireAuthenticated(secretKey),
-		usecase.RequireSession(sessionEntity, userEntity),
-		middlewares.RequireAuthorization(constant.SUPER),
-		usecase.UpdateSystemById(systemEntity),
-	)
-
+	route.GET("", usecase.GetSystems(systemEntity))
+	route.POST("", usecase.AddSystem(systemEntity))
+	route.GET("/:id", usecase.GetSystemById(systemEntity))
+	route.DELETE("/:id", usecase.DeleteSystemById(systemEntity))
+	route.PUT("/:id", usecase.UpdateSystemById(systemEntity))
 }
