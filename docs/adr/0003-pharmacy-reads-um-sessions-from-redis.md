@@ -1,0 +1,5 @@
+# Pharmacy reads UM sessions from Redis
+
+Supersedes the "without sharing Redis" clause of [ADR-0001](./0001-service-session-verification.md); its bounds still hold (cache at most 30 seconds, revocation within 60 seconds, bind to the token's session and system, stop writes and sensitive reads when no current answer exists).
+
+The pharmacy API checks a token's session by reading `session:<jti>` from UM's Redis rather than calling `GET /auth/verify`. That key's name and its JSON `userId` and `system` fields are therefore a cross-service contract, pinned by a UM test. Redis holds no role or client, so the pharmacy API keeps authorizing from the signed token's claims; this is sound only because UM revokes every session of a user whose role, status, password, or existence changes, making a live session proof that its token's claims are current. Any new UM operation that changes a user's role, client, or status must revoke their sessions. The pharmacy API gets read access to UM's Redis and must not write to it. `GET /auth/verify` remains for services that cannot reach Redis.
