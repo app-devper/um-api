@@ -116,7 +116,7 @@ type Verifier struct {
 	key     []byte
 	system  string
 	client  string
-	checker *Checker
+	checker *checker
 }
 
 // NewVerifier refuses an incomplete Config, so a service without UM's session
@@ -134,7 +134,7 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 		key:     []byte(cfg.SecretKey),
 		system:  cfg.System,
 		client:  cfg.ClientID,
-		checker: NewChecker(cfg.Store),
+		checker: newChecker(cfg.Store),
 	}, nil
 }
 
@@ -203,7 +203,7 @@ func (v *Verifier) Verify(r *http.Request, policy OutagePolicy) (Principal, erro
 }
 
 func admitDuringOutage(policy OutagePolicy, method string, lastGood Session) bool {
-	if !ReadOnlyDuringOutage(method) {
+	if !safeMethod(method) {
 		return false
 	}
 	switch policy {

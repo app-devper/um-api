@@ -13,4 +13,4 @@ Every service that accepts UM tokens used to rebuild the same pipeline: parse th
 - *"Unset, it keeps its previous behaviour."* A service without UM's session store now refuses to start (`NewVerifier` requires a store; `RedisStoreFor("")` is an error). Tests use a fake store. Each service keeps its existing environment variable for the Redis address.
 - *One outage policy for everyone.* The **Outage policy** is chosen per route group: `ReadOnlyWithLastGood` (default: safe methods continue with the last session confirmed for the token), `Strict` (writes and sensitive reads), `DegradeReads` (ordinary catalog reads continue under the signed token). This absorbs the pharmacy API's per-route policy from its ADR-0001 without changing it.
 
-The older `Checker.Check`/`Authorize` stay until every service has moved, then are removed in the next sessionclient minor version.
+Every service moved in sessionclient v0.2.x; v0.3.0 removed the older `Checker.Check`/`Authorize` API so the Verifier is the only way in.

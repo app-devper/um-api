@@ -1,7 +1,7 @@
 // Package sessionclient lets another service turn a UM access token into a
 // verified Principal: Verifier checks the token and confirms that the UM
 // session behind it is still live by reading UM's session store directly
-// (um-api ADR-0003, ADR-0005). Checker is the session lookup underneath.
+// (um-api ADR-0003, ADR-0005).
 //
 // UM revokes every session of a user whose role, status, password, or account
 // changes, so while a session exists its token's role and client claims are
@@ -106,9 +106,8 @@ func (s *RedisStore) Session(ctx context.Context, sessionID string) (Session, er
 	return session, nil
 }
 
-// Checker confirms sessions with a per-session cache. A nil *Checker, or one
-// built without a store, is disabled: Check always succeeds with a zero Session.
-type Checker struct {
+// checker confirms sessions with a per-session cache for Verifier.
+type checker struct {
 	store Store
 	ttl   time.Duration
 	now   func() time.Time
@@ -122,26 +121,8 @@ type entry struct {
 	checkedAt time.Time
 }
 
-func NewChecker(store Store) *Checker {
-	return &Checker{store: store, ttl: DefaultTTL, now: time.Now, entries: map[string]entry{}}
-}
-
-// New builds a Checker for UM's Redis at hostOrURL. An empty hostOrURL gives
-// a disabled Checker, so a service can roll out before it is configured.
-func New(hostOrURL string) (*Checker, error) {
-	if hostOrURL == "" {
-		return nil, nil
-	}
-	rdb, err := NewRedisClient(hostOrURL)
-	if err != nil {
-		return nil, err
-	}
-	return NewChecker(NewRedisStore(rdb)), nil
-}
-
-// Enabled reports whether Check consults a store.
-func (c *Checker) Enabled() bool {
-	return c != nil && c.store != nil
+func newChecker(store Store) *checker {
+	return &checker{store: store, ttl: DefaultTTL, now: time.Now, entries: map[string]entry{}}
 }
 
 // Check confirms that sessionID, taken from a token the caller has already
@@ -149,13 +130,9 @@ func (c *Checker) Enabled() bool {
 // The error is nil, ErrSessionRejected, or ErrUnavailable (possibly wrapped).
 //
 // With ErrUnavailable, the returned Session is the last one confirmed for
-// sessionID, if any (zero otherwise), so a caller applying an outage policy
-// such as ReadOnlyDuringOutage can still identify the user. Never treat it as
-// confirmation for a write.
-func (c *Checker) Check(ctx context.Context, sessionID, system string) (Session, error) {
-	if !c.Enabled() {
-		return Session{}, nil
-	}
+// sessionID, if any (zero otherwise), so an outage policy can still identify
+// the user. Never treat it as confirmation for a write.
+func (c *checker) Check(ctx context.Context, sessionID, system string) (Session, error) {
 	if sessionID == "" {
 		return Session{}, ErrSessionRejected
 	}
@@ -196,31 +173,15 @@ func (c *Checker) Check(ctx context.Context, sessionID, system string) (Session,
 	return session, nil
 }
 
-func (c *Checker) forget(sessionID string) {
+func (c *checker) forget(sessionID string) {
 	c.mu.Lock()
 	delete(c.entries, sessionID)
 	c.mu.Unlock()
 }
 
-// Authorize applies Check with the default outage policy for a request with
-// the given HTTP method: while the store is unavailable, a safe method may
-// continue with the last session confirmed for this token, and anything else
-// gets ErrUnavailable. Map ErrSessionRejected to 401 and ErrUnavailable to 503.
-func (c *Checker) Authorize(ctx context.Context, sessionID, system, method string) (Session, error) {
-	session, err := c.Check(ctx, sessionID, system)
-	if errors.Is(err, ErrUnavailable) && ReadOnlyDuringOutage(method) && session.UserId != "" {
-		return session, nil
-	}
-	if err != nil {
-		return Session{}, err
-	}
-	return session, nil
-}
-
-// ReadOnlyDuringOutage is the default outage policy: while the store is
-// unavailable, safe methods may continue under the signed token and writes
-// are refused.
-func ReadOnlyDuringOutage(method string) bool {
+// safeMethod reports whether an HTTP method only reads, so an outage policy
+// may let it continue.
+func safeMethod(method string) bool {
 	switch method {
 	case http.MethodGet, http.MethodHead, http.MethodOptions:
 		return true

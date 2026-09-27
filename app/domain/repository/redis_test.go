@@ -239,10 +239,6 @@ func TestSessionStorageContract(t *testing.T) {
 		t.Fatalf("expected key to expire with the session, got %v", ttl)
 	}
 
-	checker := sessionclient.NewChecker(reader)
-	if session, err := checker.Check(ctx, id, "PHARMACY"); err != nil || session.UserId != "u1" {
-		t.Fatalf("live session rejected: %+v err=%v", session, err)
-	}
 	if err := store.RemoveSessionById(id); err != nil {
 		t.Fatalf("remove: %v", err)
 	}
