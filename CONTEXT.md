@@ -32,6 +32,10 @@ _Avoid_: Caller, requester
 A user's permission tier, checked against the user's current account state when an operation is authorized.
 _Avoid_: Token claim
 
+**Outage policy**:
+What a request may do while UM's session store cannot answer, chosen per group of routes: continue a read with the last confirmed session, refuse everything, or continue ordinary reads under the signed token. A revoked or expired session is refused under every policy.
+_Avoid_: Fallback, fail-open
+
 **Super user**:
 A role reserved for client `000` that may administer users across clients. It does not by itself select another tenant's pharmacy data.
 _Avoid_: Implicit pharmacy tenant access
