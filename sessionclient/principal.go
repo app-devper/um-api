@@ -158,8 +158,9 @@ type accessClaims struct {
 	jwt.RegisteredClaims
 }
 
-// Verify checks the request's bearer token (signature, expiry, system, and
-// client) and the live UM session behind it, applying policy while the store
+// Verify checks the request's bearer token (signature, a required expiry,
+// system, and a required client, pinned if configured) and the live UM
+// session behind it, applying policy while the store
 // cannot answer. A refusal is always an *Error.
 func (v *Verifier) Verify(r *http.Request, policy OutagePolicy) (Principal, error) {
 	header := r.Header.Get("Authorization")
@@ -172,14 +173,15 @@ func (v *Verifier) Verify(r *http.Request, policy OutagePolicy) (Principal, erro
 			return nil, fmt.Errorf("unexpected signing method %v", t.Header["alg"])
 		}
 		return v.key, nil
-	})
+	}, jwt.WithExpirationRequired())
 	if err != nil || !token.Valid || claims.ID == "" {
 		return Principal{}, refuse(http.StatusUnauthorized, CodeInvalidToken, "token invalid", err)
 	}
 	if claims.System != v.system {
 		return Principal{}, refuse(http.StatusUnauthorized, CodeWrongSystem, "system invalid", nil)
 	}
-	if v.client != "" && claims.ClientId != v.client {
+	// UM always signs a client; a token without one names no tenant.
+	if claims.ClientId == "" || v.client != "" && claims.ClientId != v.client {
 		return Principal{}, refuse(http.StatusUnauthorized, CodeWrongClient, "clientId invalid", nil)
 	}
 

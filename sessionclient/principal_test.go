@@ -16,7 +16,7 @@ type tokenOpts struct {
 	system, client, role, id string
 	key                      string
 	method                   jwt.SigningMethod
-	expired                  bool
+	expired, noExp, noClient bool
 }
 
 func token(t *testing.T, o tokenOpts) string {
@@ -36,12 +36,18 @@ func token(t *testing.T, o tokenOpts) string {
 	if o.method == nil {
 		o.method = jwt.SigningMethodHS256
 	}
+	if o.client == "" && !o.noClient {
+		o.client = "001"
+	}
 	exp := time.Now().Add(time.Hour)
 	if o.expired {
 		exp = time.Now().Add(-time.Minute)
 	}
 	claims := accessClaims{Role: o.role, System: o.system, ClientId: o.client,
 		RegisteredClaims: jwt.RegisteredClaims{ID: o.id, ExpiresAt: jwt.NewNumericDate(exp)}}
+	if o.noExp {
+		claims.ExpiresAt = nil
+	}
 	var key interface{} = []byte(o.key)
 	if o.method == jwt.SigningMethodNone {
 		key = jwt.UnsafeAllowNoneSignatureType
