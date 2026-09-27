@@ -1,6 +1,7 @@
-// Package sessionclient lets another service confirm that the UM session
-// behind an access token it has already verified is still live, by reading
-// UM's session store directly (um-api ADR-0003).
+// Package sessionclient lets another service turn a UM access token into a
+// verified Principal: Verifier checks the token and confirms that the UM
+// session behind it is still live by reading UM's session store directly
+// (um-api ADR-0003, ADR-0005). Checker is the session lookup underneath.
 //
 // UM revokes every session of a user whose role, status, password, or account
 // changes, so while a session exists its token's role and client claims are
