@@ -15,7 +15,7 @@ import (
 
 func GetUserList(admin *useradmin.Admin) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		result, err := admin.List(actorFrom(ctx))
+		result, err := admin.ListManaged(actorFrom(ctx))
 		respondUserAdmin(ctx, result, err)
 	}
 }
@@ -51,7 +51,7 @@ func DeleteUserById(admin *useradmin.Admin) gin.HandlerFunc {
 
 func GetUserById(admin *useradmin.Admin) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		result, err := admin.Get(actorFrom(ctx), ctx.Param("id"))
+		result, err := admin.GetManaged(actorFrom(ctx), ctx.Param("id"))
 		respondUserAdmin(ctx, result, err)
 	}
 }
@@ -175,4 +175,12 @@ func respondUserAdmin(ctx *gin.Context, result any, err error) {
 	}
 	logrus.Error(err)
 	respondRepositoryError(ctx, err, "user")
+}
+
+// GetUserRules reports what the caller may do beyond individual users, such
+// as which roles they may create.
+func GetUserRules() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		ctx.JSON(http.StatusOK, useradmin.RulesFor(actorFrom(ctx)))
+	}
 }
