@@ -21,6 +21,7 @@ func ApplyUserAPI(
 	route.PUT("/change-password", usecase.ChangePassword(admin))
 
 	route.GET("", usecase.GetUserList(admin))
+	route.GET("/rules", usecase.GetUserRules())
 	route.POST("", usecase.AddUserByRole(admin))
 	route.GET("/:id", usecase.GetUserById(admin))
 	route.DELETE("/:id", usecase.DeleteUserById(admin))
