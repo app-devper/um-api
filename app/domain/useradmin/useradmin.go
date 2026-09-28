@@ -246,19 +246,21 @@ func (a *Admin) manageable(actor Actor, id string) (*model.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch actor.Role {
-	case constant.SUPER:
-		if target.Role == constant.SUPER {
-			return nil, errRolePermission
-		}
-	case constant.ADMIN:
-		if target.Role == constant.SUPER || target.Role == constant.ADMIN {
-			return nil, errRolePermission
-		}
-	default:
+	if !actor.outranks(target.Role) {
 		return nil, errRolePermission
 	}
 	return target, nil
+}
+
+// outranks: SUPER manages everyone but SUPER; ADMIN manages MANAGER and USER.
+func (actor Actor) outranks(role string) bool {
+	switch actor.Role {
+	case constant.SUPER:
+		return role != constant.SUPER
+	case constant.ADMIN:
+		return role == constant.MANAGER || role == constant.USER
+	}
+	return false
 }
 
 func (a *Admin) revokeAll(userId, reason string) {

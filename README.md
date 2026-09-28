@@ -192,6 +192,7 @@ Login behavior notes:
   - `PATCH /user/{id}/role`
   - `PATCH /user/{id}/status`
   - `DELETE /user/{id}`
+- Other services check a token's session through the [`sessionclient`](sessionclient/sessionclient.go) module (`github.com/app-devper/um-api/sessionclient`, [ADR-0004](docs/adr/0004-services-read-sessions-through-sessionclient.md)). It is a separate Go module; tag releases as `sessionclient/vX.Y.Z`.
 - Other services rely on this: they verify tokens with `GET /auth/verify` ([ADR-0001](docs/adr/0001-service-session-verification.md)), or, like the pharmacy API, read `session:<jti>` from Redis ([ADR-0003](docs/adr/0003-pharmacy-reads-um-sessions-from-redis.md)) and trust the token's claims while that session exists. Any new operation that changes a user's role, client, or status must revoke their sessions.
 - Users can proactively sign themselves out of other devices with `DELETE /auth/sessions` or revoke a specific device via `DELETE /auth/sessions/{id}`.
 
