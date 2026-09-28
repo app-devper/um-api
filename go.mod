@@ -21,6 +21,7 @@ require (
 )
 
 require (
+	github.com/app-devper/um-api/servicekit v0.0.0
 	github.com/app-devper/um-api/sessionclient v0.0.0
 	github.com/bytedance/gopkg v0.1.3 // indirect
 	github.com/bytedance/sonic v1.15.0 // indirect
@@ -64,3 +65,5 @@ require (
 )
 
 replace github.com/app-devper/um-api/sessionclient => ./sessionclient
+
+replace github.com/app-devper/um-api/servicekit => ./servicekit
