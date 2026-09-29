@@ -28,6 +28,10 @@ const (
 	// 429 Too Many Requests
 	ErrRateLimited = "UM-429-001"
 
+	// 503 Service Unavailable
+	ErrUnavailable      = "UM-503-001" // the lockout or session store cannot be reached
+	ErrSessionsNotEnded = "UM-503-002" // a change was saved but the user's Sessions could not be ended; retry
+
 	// 500 Internal Server Error
 	ErrInternal       = "UM-500-001"
 	ErrTokenGenFailed = "UM-500-002"

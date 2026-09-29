@@ -20,15 +20,6 @@ func TestCreateSSOTicketReturnsTicketForActiveUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	userID := primitive.NewObjectID()
-	userRepo := &authTestUserRepo{
-		user: &model.User{
-			Id:       userID,
-			Username: "alice",
-			ClientId: "123",
-			Role:     constant.ADMIN,
-			Status:   constant.ACTIVE,
-		},
-	}
 	ssoRepo := &authTestSSOTicketRepo{createRes: "ticket-abc"}
 
 	w := httptest.NewRecorder()
@@ -38,7 +29,7 @@ func TestCreateSSOTicketReturnsTicketForActiveUser(t *testing.T) {
 	c.Set(middlewares.ClientId, "123")
 	c.Set(middlewares.System, "UM")
 
-	CreateSSOTicket(ssoRepo, userRepo)(c)
+	CreateSSOTicket(ssoRepo)(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -64,55 +55,6 @@ func TestCreateSSOTicketReturnsTicketForActiveUser(t *testing.T) {
 	}
 	if ssoRepo.createInput.Role != constant.ADMIN || ssoRepo.createInput.ClientId != "123" || ssoRepo.createInput.System != "UM" {
 		t.Fatalf("unexpected ticket payload: %+v", ssoRepo.createInput)
-	}
-}
-
-func TestCreateSSOTicketRejectsInactiveUser(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	userID := primitive.NewObjectID()
-	userRepo := &authTestUserRepo{
-		user: &model.User{
-			Id:       userID,
-			Username: "alice",
-			ClientId: "123",
-			Role:     constant.ADMIN,
-			Status:   constant.INACTIVE,
-		},
-	}
-	ssoRepo := &authTestSSOTicketRepo{}
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Set(middlewares.UserId, userID.Hex())
-
-	CreateSSOTicket(ssoRepo, userRepo)(c)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for inactive user, got %d body=%s", w.Code, w.Body.String())
-	}
-	if ssoRepo.createInput != nil {
-		t.Fatal("expected no ticket creation for inactive user")
-	}
-}
-
-func TestCreateSSOTicketUserNotFound(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	userRepo := &authTestUserRepo{}
-	ssoRepo := &authTestSSOTicketRepo{}
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Set(middlewares.UserId, primitive.NewObjectID().Hex())
-
-	CreateSSOTicket(ssoRepo, userRepo)(c)
-
-	if w.Code != http.StatusInternalServerError && w.Code != http.StatusNotFound {
-		t.Fatalf("expected 404 or 500 for missing user, got %d body=%s", w.Code, w.Body.String())
-	}
-	if ssoRepo.createInput != nil {
-		t.Fatal("expected no ticket creation when user missing")
 	}
 }
 
@@ -145,7 +87,7 @@ func TestExchangeSSOTicketActiveUserMintsFreshToken(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(session.NewManager("test-secret", sessionRepo, userRepo), ssoRepo, userRepo)(c)
+	ExchangeSSOTicket(session.NewManager("test-secret", sessionRepo, userRepo), ssoRepo)(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -193,7 +135,7 @@ func TestExchangeSSOTicketRejectsInactiveUser(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(session.NewManager("test-secret", sessionRepo, userRepo), ssoRepo, userRepo)(c)
+	ExchangeSSOTicket(session.NewManager("test-secret", sessionRepo, userRepo), ssoRepo)(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for inactive user, got %d body=%s", w.Code, w.Body.String())

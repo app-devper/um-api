@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 	"um/db"
 
@@ -170,17 +171,21 @@ func (e *sessionEntity) RevokeOtherSessions(userId string, currentSessionId stri
 	if err != nil {
 		return 0, err
 	}
-	count := 0
+	count, failed := 0, 0
 	for _, id := range ids {
 		if id == currentSessionId {
 			continue
 		}
 		if _, err := e.rdb.Del(ctx, sessionPrefix+id).Result(); err != nil {
 			logrus.Warn("revoke session del error: ", err)
+			failed++
 			continue
 		}
 		e.rdb.SRem(ctx, userSessionsPrefix+userId, id)
 		count++
+	}
+	if failed > 0 {
+		return count, fmt.Errorf("%d session(s) could not be revoked", failed)
 	}
 	return count, nil
 }

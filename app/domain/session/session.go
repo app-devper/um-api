@@ -1,6 +1,8 @@
-// Package session owns the Session lifecycle: issuing a signed access token
-// bound to a stored Session, verifying a token against the live Session and
-// User, and renewing it. Callers never see JWT claims or the session store.
+// Package session owns the Session lifecycle (ADR-0009): starting one from
+// credentials or an SSO ticket, issuing a signed access token bound to a
+// stored Session, verifying a token against the live Session and User,
+// renewing it, and ending Sessions. Callers never see JWT claims or the
+// session store.
 package session
 
 import (
@@ -48,16 +50,31 @@ type Manager struct {
 	secretKey []byte
 	sessions  repository.ISession
 	users     repository.IUser
+	systems   repository.ISystem
+	guard     repository.ILoginGuard
 	ttl       time.Duration
 }
 
-func NewManager(secretKey string, sessions repository.ISession, users repository.IUser) *Manager {
-	return &Manager{
+// Option configures a Manager.
+type Option func(*Manager)
+
+// WithLogin lets the Manager start Sessions from credentials (Start): it
+// checks the User belongs to the System's Client and counts failures.
+func WithLogin(systems repository.ISystem, guard repository.ILoginGuard) Option {
+	return func(m *Manager) { m.systems, m.guard = systems, guard }
+}
+
+func NewManager(secretKey string, sessions repository.ISession, users repository.IUser, opts ...Option) *Manager {
+	m := &Manager{
 		secretKey: []byte(secretKey),
 		sessions:  sessions,
 		users:     users,
 		ttl:       config.AccessTokenTime,
 	}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
 }
 
 // Issue starts a Session for an authenticated, ACTIVE user on a System and
@@ -70,7 +87,7 @@ func (m *Manager) Issue(user *model.User, system string, meta Metadata) (string,
 		System:    system,
 	})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("%w: create session: %v", ErrUnavailable, err)
 	}
 	return m.sign(Principal{
 		SessionId: sessionId,
@@ -115,6 +132,9 @@ func (m *Manager) Verify(token string) (*Principal, error) {
 	}
 	if user.Status != constant.ACTIVE {
 		return nil, ErrUserInactive
+	}
+	if !systemAllowed(user.Role, claims.System) {
+		return nil, fmt.Errorf("%w: SUPER outside %s", ErrSessionInvalid, constant.SuperSystem)
 	}
 	return &Principal{
 		SessionId: claims.ID,

@@ -105,12 +105,16 @@ func (m *memUsers) ChangePassword(id, clientId string, form request.ChangePasswo
 type revocation struct{ userId, kept string }
 
 type memSessions struct {
-	repository.ISession
 	revoked []revocation
+	// fail makes ending Sessions fail, as when the session store is down.
+	fail bool
 }
 
-func (s *memSessions) RevokeOtherSessions(userId, current string) (int, error) {
-	s.revoked = append(s.revoked, revocation{userId, current})
+func (s *memSessions) EndAll(userId, keep string) (int, error) {
+	if s.fail {
+		return 0, errors.New("session store down")
+	}
+	s.revoked = append(s.revoked, revocation{userId, keep})
 	return 1, nil
 }
 
@@ -429,5 +433,42 @@ func TestUnlock(t *testing.T) {
 	}
 	if err := f.admin.Unlock(actorOf(admin), peer.Id.Hex()); code(err) != errs.ErrInvalidRolePermission {
 		t.Fatalf("ADMIN must not unlock a peer ADMIN, got %v", err)
+	}
+}
+
+// A change services must see is reported as not finished when the User's
+// Sessions could not be ended; repeating it is safe (ADR-0009).
+func TestChangesReportSessionsThatCouldNotEnd(t *testing.T) {
+	ops := map[string]func(a *Admin, actor Actor, id string) error{
+		"SetStatus": func(a *Admin, actor Actor, id string) error {
+			_, err := a.SetStatus(actor, id, request.UpdateStatus{Status: constant.INACTIVE})
+			return err
+		},
+		"SetRole": func(a *Admin, actor Actor, id string) error {
+			_, err := a.SetRole(actor, id, request.UpdateRole{Role: constant.MANAGER})
+			return err
+		},
+		"SetPassword": func(a *Admin, actor Actor, id string) error {
+			_, err := a.SetPassword(actor, id, request.SetPassword{Password: "new-password-1"})
+			return err
+		},
+		"Delete": func(a *Admin, actor Actor, id string) error {
+			_, err := a.Delete(actor, id)
+			return err
+		},
+	}
+	for name, run := range ops {
+		f := newFixture()
+		f.sessions.fail = true
+		admin := f.user(constant.ADMIN, "123")
+		target := f.user(constant.USER, "123")
+		if got := code(run(f.admin, actorOf(admin), target.Id.Hex())); got != errs.ErrSessionsNotEnded {
+			t.Errorf("%s: got %q, want %q", name, got, errs.ErrSessionsNotEnded)
+		}
+		if name == "Delete" {
+			if _, ok := f.users.byId[target.Id.Hex()]; !ok {
+				t.Error("Delete removed the user although its sessions are still live")
+			}
+		}
 	}
 }
