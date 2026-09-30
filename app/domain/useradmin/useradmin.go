@@ -28,12 +28,18 @@ type Actor struct {
 
 type Admin struct {
 	users    repository.IUser
-	sessions repository.ISession
+	sessions Sessions
 	systems  repository.ISystem
 	guard    repository.ILoginGuard
 }
 
-func New(users repository.IUser, sessions repository.ISession, systems repository.ISystem, guard repository.ILoginGuard) *Admin {
+// Sessions ends a User's Sessions; the session module (ADR-0009). EndAll
+// reports an error if any Session is still live.
+type Sessions interface {
+	EndAll(userId, keep string) (int, error)
+}
+
+func New(users repository.IUser, sessions Sessions, systems repository.ISystem, guard repository.ILoginGuard) *Admin {
 	return &Admin{users: users, sessions: sessions, systems: systems, guard: guard}
 }
 
@@ -43,6 +49,9 @@ var (
 	errInvalidClient  = errs.New(errs.ErrInvalidClientId, "invalid client id")
 	errInvalidRole    = errs.New(errs.ErrInvalidRole, "invalid role")
 	errSuperClient    = errs.New(errs.ErrInvalidClientId, "SUPER must have clientId "+constant.SuperClientId)
+	// errSessionsNotEnded: the change was saved but some Sessions are still
+	// live; repeating the command ends them.
+	errSessionsNotEnded = errs.New(errs.ErrSessionsNotEnded, "saved, but the user's sessions could not be ended; try again")
 )
 
 func (a *Admin) List(actor Actor) ([]model.User, error) {
@@ -125,12 +134,12 @@ func (a *Admin) Delete(actor Actor, id string) (*model.User, error) {
 	if _, err := a.manageable(actor, id); err != nil {
 		return nil, err
 	}
-	result, err := a.users.RemoveUserById(id, actor.scope())
-	if err != nil {
+	// Sessions end first: once the User is gone a retry could not find it to
+	// end them.
+	if err := a.endAll(id, ""); err != nil {
 		return nil, err
 	}
-	a.revokeAll(id, "user deletion")
-	return result, nil
+	return a.users.RemoveUserById(id, actor.scope())
 }
 
 // SetStatus changes a User's status and revokes all of their Sessions.
@@ -152,7 +161,9 @@ func (a *Admin) SetStatus(actor Actor, id string, form request.UpdateStatus) (*m
 	if err != nil {
 		return nil, err
 	}
-	a.revokeAll(id, "status change")
+	if err := a.endAll(id, ""); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -184,7 +195,9 @@ func (a *Admin) SetRole(actor Actor, id string, form request.UpdateRole) (*model
 	if err != nil {
 		return nil, err
 	}
-	a.revokeAll(id, "role change")
+	if err := a.endAll(id, ""); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -201,7 +214,9 @@ func (a *Admin) SetPassword(actor Actor, id string, form request.SetPassword) (*
 	if err != nil {
 		return nil, err
 	}
-	a.revokeAll(id, "admin password reset")
+	if err := a.endAll(id, ""); err != nil {
+		return nil, err
+	}
 	return result, nil
 }
 
@@ -233,8 +248,8 @@ func (a *Admin) ChangeOwnPassword(actor Actor, form request.ChangePassword) (*mo
 	if err != nil {
 		return nil, err
 	}
-	if _, err := a.sessions.RevokeOtherSessions(user.Id.Hex(), actor.SessionId); err != nil {
-		logrus.Warn("revoke other sessions after password change: ", err)
+	if err := a.endAll(user.Id.Hex(), actor.SessionId); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
@@ -263,10 +278,15 @@ func (actor Actor) outranks(role string) bool {
 	return false
 }
 
-func (a *Admin) revokeAll(userId, reason string) {
-	if _, err := a.sessions.RevokeOtherSessions(userId, ""); err != nil {
-		logrus.Warnf("revoke sessions after %s: %v", reason, err)
+// endAll ends the User's Sessions (except keep) after a change services must
+// see (ADR-0003). If some stay live the command reports it; the change is
+// saved and repeating the command is safe.
+func (a *Admin) endAll(userId, keep string) error {
+	if _, err := a.sessions.EndAll(userId, keep); err != nil {
+		logrus.Error("end sessions: ", err)
+		return errSessionsNotEnded
 	}
+	return nil
 }
 
 // scope is the Client filter for user lookups; empty means every Client.

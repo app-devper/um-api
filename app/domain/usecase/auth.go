@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"um/app/core/constant"
 	"um/app/core/errs"
 	"um/app/core/utils"
 	"um/app/domain/repository"
@@ -41,51 +40,16 @@ func RequireSession(sessions *session.Manager) gin.HandlerFunc {
 	}
 }
 
-func Login(sessions *session.Manager, userEntity repository.IUser, systemEntity repository.ISystem, loginGuard repository.ILoginGuard) gin.HandlerFunc {
+// Login starts a Session from credentials; the session module owns every
+// rule (ADR-0009).
+func Login(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.Login{}
 		if err := ctx.ShouldBind(&req); err != nil {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
-
-		username := utils.NormalizeUsername(req.Username)
-		locked, err := loginGuard.IsLocked(username)
-		if err != nil {
-			logrus.Warn("loginGuard IsLocked error: ", err)
-		} else if locked {
-			errs.Response(ctx, http.StatusTooManyRequests, errs.New(errs.ErrRateLimited, "account locked due to too many failed login attempts, try again later"))
-			return
-		}
-
-		user, err := userEntity.GetUserByUsername(username)
-		if err != nil || user == nil {
-			_ = loginGuard.RecordFailure(username)
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
-			return
-		}
-		if utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
-			_ = loginGuard.RecordFailure(username)
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "wrong username or password"))
-			return
-		}
-
-		if user.Status != constant.ACTIVE {
-			_ = loginGuard.RecordFailure(username)
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "account is not active"))
-			return
-		}
-
-		system, err := systemEntity.GetSystem(user.ClientId, req.System)
-		if err != nil || system == nil {
-			_ = loginGuard.RecordFailure(username)
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, "invalid client or system"))
-			return
-		}
-
-		_ = loginGuard.Reset(username)
-
-		token, err := sessions.Issue(user, req.System, sessionMetadata(ctx))
+		token, err := sessions.Start(session.Credentials{Username: req.Username, Password: req.Password, System: req.System}, sessionMetadata(ctx))
 		if err != nil {
 			respondSessionError(ctx, err)
 			return
@@ -133,37 +97,23 @@ func VerifySession() gin.HandlerFunc {
 	}
 }
 
-func Logout(sessionEntity repository.ISession) gin.HandlerFunc {
+// Logout ends the current Session.
+func Logout(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		sessionId := ctx.GetString(middlewares.SessionId)
-		if err := sessionEntity.RemoveSessionById(sessionId); err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+		if err := sessions.End(ctx.GetString(middlewares.SessionId)); err != nil {
+			respondSessionError(ctx, err)
 			return
 		}
-		result := gin.H{
-			"message": "success",
-		}
-		ctx.JSON(http.StatusOK, result)
+		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	}
 }
 
-func CreateSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IUser) gin.HandlerFunc {
+// CreateSSOTicket hands the verified Session's User and System to another app
+// of the same System; RequireSession has already checked the User is ACTIVE.
+func CreateSSOTicket(ssoEntity repository.ISSOTicket) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userId := ctx.GetString(middlewares.UserId)
-		user, err := userEntity.GetUserById(userId)
-		if err != nil {
-			logrus.Error(err)
-			respondRepositoryError(ctx, err, "user")
-			return
-		}
-		if user.Status != constant.ACTIVE {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
-			return
-		}
-
 		payload := repository.TicketPayload{
-			UserId:   userId,
+			UserId:   ctx.GetString(middlewares.UserId),
 			Role:     ctx.GetString(middlewares.Role),
 			ClientId: ctx.GetString(middlewares.ClientId),
 			System:   ctx.GetString(middlewares.System),
@@ -181,31 +131,21 @@ func CreateSSOTicket(ssoEntity repository.ISSOTicket, userEntity repository.IUse
 	}
 }
 
-func ExchangeSSOTicket(sessions *session.Manager, ssoEntity repository.ISSOTicket, userEntity repository.IUser) gin.HandlerFunc {
+// ExchangeSSOTicket starts a Session from a one-time ticket on the ticket's
+// System; the session module re-checks the User (ADR-0009).
+func ExchangeSSOTicket(sessions *session.Manager, ssoEntity repository.ISSOTicket) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.ExchangeTicket{}
 		if err := ctx.ShouldBind(&req); err != nil {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
-
 		payload, err := ssoEntity.Consume(req.Ticket)
 		if err != nil {
 			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "ticket invalid or expired"))
 			return
 		}
-
-		user, err := userEntity.GetUserById(payload.UserId)
-		if err != nil || user == nil {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "ticket invalid or expired"))
-			return
-		}
-		if user.Status != constant.ACTIVE {
-			errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))
-			return
-		}
-
-		token, err := sessions.Issue(user, payload.System, sessionMetadata(ctx))
+		token, err := sessions.Resume(payload.UserId, payload.System, sessionMetadata(ctx))
 		if err != nil {
 			respondSessionError(ctx, err)
 			return
@@ -214,58 +154,33 @@ func ExchangeSSOTicket(sessions *session.Manager, ssoEntity repository.ISSOTicke
 	}
 }
 
-func ListSessions(sessionEntity repository.ISession) gin.HandlerFunc {
+func ListSessions(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userId := ctx.GetString(middlewares.UserId)
-		currentSessionId := ctx.GetString(middlewares.SessionId)
-		items, err := sessionEntity.ListUserSessions(userId, currentSessionId)
+		items, err := sessions.List(ctx.GetString(middlewares.UserId), ctx.GetString(middlewares.SessionId))
 		if err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			respondSessionError(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, items)
 	}
 }
 
-func RevokeSession(sessionEntity repository.ISession) gin.HandlerFunc {
+func RevokeSession(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		targetId := ctx.Param("id")
-		userId := ctx.GetString(middlewares.UserId)
-		currentSessionId := ctx.GetString(middlewares.SessionId)
-
-		if targetId == currentSessionId {
-			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, "cannot revoke current session, use logout instead"))
-			return
-		}
-
-		target, err := sessionEntity.GetSessionById(targetId)
+		err := sessions.EndOther(ctx.GetString(middlewares.UserId), ctx.GetString(middlewares.SessionId), ctx.Param("id"))
 		if err != nil {
-			errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, "session not found"))
-			return
-		}
-		if target.UserId != userId {
-			errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
-			return
-		}
-
-		if err := sessionEntity.RemoveSessionById(targetId); err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			respondSessionError(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	}
 }
 
-func RevokeOtherSessions(sessionEntity repository.ISession) gin.HandlerFunc {
+func RevokeOtherSessions(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userId := ctx.GetString(middlewares.UserId)
-		currentSessionId := ctx.GetString(middlewares.SessionId)
-		count, err := sessionEntity.RevokeOtherSessions(userId, currentSessionId)
+		count, err := sessions.EndAll(ctx.GetString(middlewares.UserId), ctx.GetString(middlewares.SessionId))
 		if err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			respondSessionError(ctx, err)
 			return
 		}
 		ctx.JSON(http.StatusOK, gin.H{"message": "success", "revoked": count})
@@ -308,6 +223,22 @@ func sessionMetadata(ctx *gin.Context) session.Metadata {
 
 func respondSessionError(ctx *gin.Context, err error) {
 	switch {
+	case errors.Is(err, session.ErrWrongCredentials), errors.Is(err, session.ErrNotActive), errors.Is(err, session.ErrWrongSystem):
+		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrWrongCredentials, err.Error()))
+	case errors.Is(err, session.ErrLocked):
+		errs.Response(ctx, http.StatusTooManyRequests, errs.New(errs.ErrRateLimited, err.Error()))
+	case errors.Is(err, session.ErrUnavailable):
+		logrus.Error(err)
+		errs.Response(ctx, http.StatusServiceUnavailable, errs.New(errs.ErrUnavailable, "identity store unavailable, try again later"))
+	case errors.Is(err, session.ErrNotEnded):
+		logrus.Error(err)
+		errs.Response(ctx, http.StatusServiceUnavailable, errs.New(errs.ErrSessionsNotEnded, "sessions could not be ended, try again"))
+	case errors.Is(err, session.ErrCurrent):
+		errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+	case errors.Is(err, session.ErrNotFound):
+		errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, err.Error()))
+	case errors.Is(err, session.ErrNotOwner):
+		errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "Don't have permission"))
 	case errors.Is(err, session.ErrTokenInvalid), errors.Is(err, session.ErrUserInactive):
 		logrus.Warn(err)
 		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrTokenInvalid, "token invalid"))

@@ -55,8 +55,8 @@ func (app Routes) StartGin() {
 	systemEntity := repository.NewSystemEntity(resource)
 	loginGuard := repository.NewLoginGuardEntity(resource, cfg.LockoutEnabled)
 	ssoEntity := repository.NewSSOTicketEntity(resource)
-	sessions := session.NewManager(cfg.SecretKey, sessionEntity, userEntity)
-	admin := useradmin.New(userEntity, sessionEntity, systemEntity, loginGuard)
+	sessions := session.NewManager(cfg.SecretKey, sessionEntity, userEntity, session.WithLogin(systemEntity, loginGuard))
+	admin := useradmin.New(userEntity, sessions, systemEntity, loginGuard)
 
 	protectedRoute := publicRoute.Group("", usecase.RequireSession(sessions))
 

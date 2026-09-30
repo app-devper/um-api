@@ -29,23 +29,23 @@ func ApplyAuthAPI(
 
 	open.POST("/login",
 		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
-		usecase.Login(sessions, userEntity, systemEntity, loginGuard),
+		usecase.Login(sessions),
 	)
 
 	open.POST("/exchange",
 		middlewares.RateLimiter(rdb, 10, 1*time.Minute),
-		usecase.ExchangeSSOTicket(sessions, ssoEntity, userEntity),
+		usecase.ExchangeSSOTicket(sessions, ssoEntity),
 	)
 
 	route := protected.Group("auth")
 
-	route.POST("/sso-ticket", usecase.CreateSSOTicket(ssoEntity, userEntity))
+	route.POST("/sso-ticket", usecase.CreateSSOTicket(ssoEntity))
 	route.GET("/keep-alive", usecase.KeepAlive(sessions))
 	route.GET("/verify", usecase.VerifySession())
 	route.GET("/system", usecase.GetSystem(systemEntity))
 	route.POST("/verify-password", usecase.VerifyPassword(userEntity))
-	route.POST("/logout", usecase.Logout(sessionEntity))
-	route.GET("/sessions", usecase.ListSessions(sessionEntity))
-	route.DELETE("/sessions", usecase.RevokeOtherSessions(sessionEntity))
-	route.DELETE("/sessions/:id", usecase.RevokeSession(sessionEntity))
+	route.POST("/logout", usecase.Logout(sessions))
+	route.GET("/sessions", usecase.ListSessions(sessions))
+	route.DELETE("/sessions", usecase.RevokeOtherSessions(sessions))
+	route.DELETE("/sessions/:id", usecase.RevokeSession(sessions))
 }
