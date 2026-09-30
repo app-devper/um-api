@@ -11,6 +11,7 @@ import (
 	"um/app/core/utils"
 	"um/app/domain/model"
 	"um/app/domain/repository"
+	"um/app/domain/session"
 	"um/app/domain/useradmin"
 	"um/app/featues/request"
 	"um/middlewares"
@@ -108,7 +109,7 @@ func TestChangePasswordRevokesOtherSessions(t *testing.T) {
 	c.Set(middlewares.SessionId, "current-session")
 	c.Set(middlewares.ClientId, "123")
 
-	ChangePassword(useradmin.New(userRepo, sessionRepo, nil, nil))(c)
+	ChangePassword(useradmin.New(userRepo, session.NewManager("", sessionRepo, nil), nil, nil))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())

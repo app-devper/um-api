@@ -29,7 +29,7 @@ The user performing an administrative operation on another user, judged by their
 _Avoid_: Caller, requester
 
 **Role**:
-A user's permission tier, checked against the user's current account state when an operation is authorized.
+A user's permission tier, checked against the user's current account state when an operation is authorized. SUPER belongs only to client 000 and is used only in System SM (user management); it never reaches another System such as POS, pharmacy, snook, gold or alert.
 _Avoid_: Token claim
 
 **Outage policy**:

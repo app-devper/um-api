@@ -300,7 +300,7 @@ func TestLoginRejectsUnknownSystemForUserTenant(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(session.NewManager("test-secret", sessionRepo, userRepo), userRepo, systemRepo, loginGuard)(c)
+	Login(session.NewManager("test-secret", sessionRepo, userRepo, session.WithLogin(systemRepo, loginGuard)))(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
@@ -351,7 +351,7 @@ func TestLoginCreatesSessionWhenSystemBelongsToUserTenant(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(session.NewManager("test-secret", sessionRepo, userRepo), userRepo, systemRepo, loginGuard)(c)
+	Login(session.NewManager("test-secret", sessionRepo, userRepo, session.WithLogin(systemRepo, loginGuard)))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -417,7 +417,7 @@ func TestLoginRejectsWrongPassword(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(session.NewManager("test-secret", sessionRepo, userRepo), userRepo, systemRepo, loginGuard)(c)
+	Login(session.NewManager("test-secret", sessionRepo, userRepo, session.WithLogin(systemRepo, loginGuard)))(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
@@ -471,7 +471,7 @@ func TestLoginRejectsInactiveUser(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(session.NewManager("test-secret", sessionRepo, userRepo), userRepo, systemRepo, loginGuard)(c)
+	Login(session.NewManager("test-secret", sessionRepo, userRepo, session.WithLogin(systemRepo, loginGuard)))(c)
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("expected 401, got %d body=%s", w.Code, w.Body.String())
@@ -525,7 +525,7 @@ func TestLoginRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	Login(session.NewManager("", sessionRepo, userRepo), userRepo, systemRepo, loginGuard)(c)
+	Login(session.NewManager("", sessionRepo, userRepo, session.WithLogin(systemRepo, loginGuard)))(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
@@ -569,7 +569,7 @@ func TestExchangeSSOTicketRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(session.NewManager("", sessionRepo, userRepo), ssoRepo, userRepo)(c)
+	ExchangeSSOTicket(session.NewManager("", sessionRepo, userRepo), ssoRepo)(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())
@@ -704,7 +704,7 @@ func TestListSessionsReturnsItems(t *testing.T) {
 	c.Set(middlewares.UserId, "user-123")
 	c.Set(middlewares.SessionId, "s1")
 
-	ListSessions(sessionRepo)(c)
+	ListSessions(session.NewManager("", sessionRepo, nil))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -732,7 +732,7 @@ func TestRevokeSessionRejectsCurrentSession(t *testing.T) {
 	c.Set(middlewares.UserId, "user-123")
 	c.Set(middlewares.SessionId, "current-session")
 
-	RevokeSession(sessionRepo)(c)
+	RevokeSession(session.NewManager("", sessionRepo, nil))(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
@@ -757,7 +757,7 @@ func TestRevokeSessionRejectsOtherUsersSession(t *testing.T) {
 	c.Set(middlewares.UserId, "user-123")
 	c.Set(middlewares.SessionId, "current-session")
 
-	RevokeSession(sessionRepo)(c)
+	RevokeSession(session.NewManager("", sessionRepo, nil))(c)
 
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("expected 403, got %d body=%s", w.Code, w.Body.String())
@@ -782,7 +782,7 @@ func TestRevokeSessionRemovesOwnedSession(t *testing.T) {
 	c.Set(middlewares.UserId, "user-123")
 	c.Set(middlewares.SessionId, "current-session")
 
-	RevokeSession(sessionRepo)(c)
+	RevokeSession(session.NewManager("", sessionRepo, nil))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -802,7 +802,7 @@ func TestRevokeOtherSessionsReturnsCount(t *testing.T) {
 	c.Set(middlewares.UserId, "user-123")
 	c.Set(middlewares.SessionId, "current-session")
 
-	RevokeOtherSessions(sessionRepo)(c)
+	RevokeOtherSessions(session.NewManager("", sessionRepo, nil))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -913,7 +913,7 @@ func TestLogoutRemovesSession(t *testing.T) {
 	c, _ := gin.CreateTestContext(w)
 	c.Set(middlewares.SessionId, "session-123")
 
-	Logout(sessionRepo)(c)
+	Logout(session.NewManager("", sessionRepo, nil))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
