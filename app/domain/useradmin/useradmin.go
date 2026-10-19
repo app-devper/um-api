@@ -31,6 +31,17 @@ type Admin struct {
 	sessions Sessions
 	systems  repository.ISystem
 	guard    repository.ILoginGuard
+	passkeys Passkeys
+}
+
+// Passkeys forgets a deleted User's Passkeys (ADR-0010).
+type Passkeys interface {
+	DeleteAllForUser(userId string) error
+}
+
+// WithPasskeys makes Delete remove the User's Passkeys too.
+func WithPasskeys(p Passkeys) func(*Admin) {
+	return func(a *Admin) { a.passkeys = p }
 }
 
 // Sessions ends a User's Sessions; the session module (ADR-0009). EndAll
@@ -138,6 +149,11 @@ func (a *Admin) Delete(actor Actor, id string) (*model.User, error) {
 	// end them.
 	if err := a.endAll(id, ""); err != nil {
 		return nil, err
+	}
+	if a.passkeys != nil {
+		if err := a.passkeys.DeleteAllForUser(id); err != nil {
+			return nil, err
+		}
 	}
 	return a.users.RemoveUserById(id, actor.scope())
 }

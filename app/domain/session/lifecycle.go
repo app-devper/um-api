@@ -80,17 +80,41 @@ func (m *Manager) authenticate(username string, c Credentials) (*model.User, err
 	if utils.ComparePasswordAndHashedPassword(c.Password, user.Password) != nil {
 		return nil, ErrWrongCredentials
 	}
+	return user, m.eligible(user, c.System)
+}
+
+// eligible applies the rules every login shares: the User is ACTIVE, the
+// User's Client has the System, and a SUPER uses only System SM.
+func (m *Manager) eligible(user *model.User, system string) error {
 	if user.Status != constant.ACTIVE {
-		return nil, ErrNotActive
+		return ErrNotActive
 	}
-	if !systemAllowed(user.Role, c.System) {
-		return nil, ErrWrongSystem
+	if !systemAllowed(user.Role, system) {
+		return ErrWrongSystem
 	}
-	system, err := m.systems.GetSystem(user.ClientId, c.System)
-	if err != nil || system == nil {
-		return nil, ErrWrongSystem
+	found, err := m.systems.GetSystem(user.ClientId, system)
+	if err != nil || found == nil {
+		return ErrWrongSystem
 	}
-	return user, nil
+	return nil
+}
+
+// StartWithPasskey starts a Session for a User whose Passkey assertion has
+// already been verified (ADR-0010). It applies the password login's rules
+// except the password and the lockout: the lockout counts wrong passwords,
+// and a forged assertion is not a guess that gets closer.
+func (m *Manager) StartWithPasskey(userId, system string, meta Metadata) (string, error) {
+	if m.systems == nil {
+		return "", errors.New("session manager has no login (WithLogin)")
+	}
+	user, err := m.users.GetUserById(userId)
+	if err != nil || user == nil {
+		return "", ErrWrongCredentials
+	}
+	if err := m.eligible(user, system); err != nil {
+		return "", err
+	}
+	return m.Issue(user, system, meta)
 }
 
 // Resume starts a Session for a User who already holds one on the System,

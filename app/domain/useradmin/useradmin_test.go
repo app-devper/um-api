@@ -472,3 +472,26 @@ func TestChangesReportSessionsThatCouldNotEnd(t *testing.T) {
 		}
 	}
 }
+
+type memPasskeys struct{ deleted []string }
+
+func (p *memPasskeys) DeleteAllForUser(userId string) error {
+	p.deleted = append(p.deleted, userId)
+	return nil
+}
+
+// Deleting a User deletes their Passkeys before the User, so a failed
+// attempt leaves the User in place to retry (ADR-0010).
+func TestDeleteRemovesTheUsersPasskeys(t *testing.T) {
+	f := newFixture()
+	keys := &memPasskeys{}
+	WithPasskeys(keys)(f.admin)
+	admin := f.user(constant.ADMIN, "123")
+	target := f.user(constant.USER, "123")
+	if _, err := f.admin.Delete(actorOf(admin), target.Id.Hex()); err != nil {
+		t.Fatal(err)
+	}
+	if len(keys.deleted) != 1 || keys.deleted[0] != target.Id.Hex() {
+		t.Fatalf("deleted passkeys of %v", keys.deleted)
+	}
+}

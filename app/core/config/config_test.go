@@ -112,3 +112,36 @@ func TestLoadAppConfigRejectsInvalidRedisHost(t *testing.T) {
 		t.Fatalf("expected redis host validation error, got %q", err.Error())
 	}
 }
+
+func TestWebAuthnOriginsMustBeHTTPSOnTheRPID(t *testing.T) {
+	base := AppConfig{Port: "8585", MongoHost: "localhost:27017", MongoUMDBName: "um", RedisHost: "localhost:6379", SecretKey: "s"}
+	cases := []struct {
+		name    string
+		rpID    string
+		origins []string
+		ok      bool
+	}{
+		{"disabled", "", nil, true},
+		{"subdomain origins", "devper.app", []string{"https://port.devper.app", "https://um.devper.app"}, true},
+		{"rp id itself", "devper.app", []string{"https://devper.app"}, true},
+		{"localhost dev", "localhost", []string{"http://localhost:4173"}, true},
+		{"no origins", "devper.app", nil, false},
+		{"plain http", "devper.app", []string{"http://port.devper.app"}, false},
+		{"other domain", "devper.app", []string{"https://devper-port.web.app"}, false},
+		{"lookalike suffix", "devper.app", []string{"https://evildevper.app"}, false},
+		{"origin with path", "devper.app", []string{"https://port.devper.app/login"}, false},
+	}
+	for _, c := range cases {
+		cfg := base
+		cfg.WebAuthnRPID, cfg.WebAuthnOrigin = c.rpID, c.origins
+		if err := cfg.Validate(); (err == nil) != c.ok {
+			t.Errorf("%s: err %v, want ok=%v", c.name, err, c.ok)
+		}
+	}
+}
+
+func TestWebAuthnOriginsAreACommaList(t *testing.T) {
+	if got := splitList(" https://a.devper.app, ,https://b.devper.app "); len(got) != 2 || got[1] != "https://b.devper.app" {
+		t.Fatalf("got %q", got)
+	}
+}
