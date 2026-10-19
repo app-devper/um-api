@@ -29,6 +29,7 @@ type softAuthenticator struct {
 	credID     []byte
 	userHandle []byte
 	signCount  uint32
+	skipUV     bool
 }
 
 func newSoftAuthenticator(t *testing.T, rpID, origin string) *softAuthenticator {
@@ -128,7 +129,11 @@ func (a *softAuthenticator) get(options []byte) []byte {
 	a.t.Helper()
 	o := a.parse(options)
 	clientData := a.clientData("webauthn.get", o.PublicKey.Challenge)
-	authData := a.authData(flagUserPresent|flagUserVerified, nil)
+	flags := byte(flagUserPresent | flagUserVerified)
+	if a.skipUV {
+		flags = flagUserPresent
+	}
+	authData := a.authData(flags, nil)
 	clientHash := sha256.Sum256(clientData)
 	digest := sha256.Sum256(append(append([]byte{}, authData...), clientHash[:]...))
 	signature, err := ecdsa.SignASN1(rand.Reader, a.key, digest[:])

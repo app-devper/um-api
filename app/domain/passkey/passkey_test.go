@@ -244,6 +244,12 @@ func TestLoginRefusals(t *testing.T) {
 		t.Errorf("alice's credential claiming bob: %v", err)
 	}
 
+	presenceOnly := *a
+	presenceOnly.skipUV = true
+	if _, err := f.login(&presenceOnly, "PORT"); !errors.Is(err, ErrNotAccepted) {
+		t.Errorf("assertion without user verification: %v", err)
+	}
+
 	phishing := *a
 	phishing.origin = "https://devper-port.web.app"
 	if _, err := f.login(&phishing, "PORT"); !errors.Is(err, ErrNotAccepted) {
