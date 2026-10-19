@@ -6,6 +6,7 @@ const (
 	ErrTokenInvalid      = "UM-401-002"
 	ErrSessionInvalid    = "UM-401-003"
 	ErrWrongCredentials  = "UM-401-004"
+	ErrPasskeyRejected   = "UM-401-005" // the authenticator's answer did not verify
 
 	// 400 Bad Request
 	ErrBadRequest      = "UM-400-001"
@@ -13,6 +14,7 @@ const (
 	ErrInvalidClientId = "UM-400-003"
 	ErrInvalidRole     = "UM-400-004"
 	ErrDeleteSelf      = "UM-400-005"
+	ErrCeremonyExpired = "UM-400-006" // a passkey request expired or was already answered; start again
 
 	// 403 Forbidden
 	ErrForbidden             = "UM-403-001"
@@ -23,7 +25,8 @@ const (
 	ErrUsernameTaken = "UM-409-001"
 
 	// 404 Not Found
-	ErrNotFound = "UM-404-001"
+	ErrNotFound         = "UM-404-001"
+	ErrPasskeysDisabled = "UM-404-002" // WEBAUTHN_RP_ID is not set
 
 	// 429 Too Many Requests
 	ErrRateLimited = "UM-429-001"

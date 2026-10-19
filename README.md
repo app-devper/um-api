@@ -10,6 +10,7 @@ User management (UM) is defined as the effective management of users giving them
 - **SSO handoff** — One-time ticket exchange so other front-ends (e.g. `dpharm.web.app`) can hand the user off to the UM profile page without re-login
 - **Session management** — List own active sessions with device / IP / system metadata and force-logout other devices. Every authenticated request re-reads the user from MongoDB so role changes, status changes, and password/admin-reset events take effect on the next request (no 24 h JWT drift window)
 - **Automatic session revocation** — Password change, admin password reset, role change, and status change drop the target user's active sessions so stolen or stale tokens stop working immediately
+- **Passkeys** — Users register WebAuthn passkeys (with their current password) and sign in without a password on any front end served under the configured relying-party domain (ADR-0010). Optional: off unless `WEBAUTHN_RP_ID` is set
 - **Brute-force protection** — IP rate limit on `/auth/login` (always on) + optional per-username account lockout after 5 consecutive failures for 15 minutes (opt-in via `LOGIN_LOCKOUT_ENABLED`, disabled by default)
 - **CORS** — Configurable cross-origin resource sharing
 - **Structured Error Handling** — Consistent error codes and messages across all endpoints
@@ -50,6 +51,12 @@ Domain language and decisions: [Identity context](./CONTEXT.md), [Architecture n
 | DELETE | `/sessions`        | Yes  | Sign out everywhere else (keep current)       |
 | DELETE | `/sessions/:id`    | Yes  | Revoke a specific own session                 |
 | POST   | `/logout`          | Yes  | Logout and end session                       |
+| POST   | `/passkey/login/options` | No | Start a username-less passkey login on a System (`{system}` → `{ceremonyId, options}`) |
+| POST   | `/passkey/login`   | No   | Finish it (`{ceremonyId, credential}` → `{accessToken}`) |
+| POST   | `/passkeys/options`| Yes  | Start registering a passkey (`{password}` → `{ceremonyId, options}`) |
+| POST   | `/passkeys`        | Yes  | Finish registering (`{ceremonyId, name, credential}` → passkey) |
+| GET    | `/passkeys`        | Yes  | List own passkeys                             |
+| DELETE | `/passkeys/:id`    | Yes  | Delete one of own passkeys                    |
 
 ### User (`/api/um/v1/user`)
 
@@ -145,6 +152,9 @@ SECRET_KEY=your_secret_key
 | `REDIS_HOST`             | Redis connection target. Supported formats: `host:port`, `redis://...`, `rediss://...`         | Yes      | —       |
 | `SECRET_KEY`             | Secret key used to sign JWT tokens                                                              | Yes      | —       |
 | `LOGIN_LOCKOUT_ENABLED`  | Turn on per-username account lockout (`1`/`true`/`yes`/`on` to enable, anything else disables). | No       | off     |
+| `WEBAUTHN_RP_ID`         | Relying-party domain passkeys belong to (e.g. `devper.app`). Unset disables passkeys (routes answer 404 `UM-404-002`). | No | — |
+| `WEBAUTHN_RP_NAME`       | Name shown by the authenticator. | No | RP ID |
+| `WEBAUTHN_RP_ORIGINS`    | Comma-separated page origins allowed to run a passkey ceremony; each must be `https://` on the RP ID's domain (`http://localhost:*` allowed for development). Required when `WEBAUTHN_RP_ID` is set. | With RP ID | — |
 
 > **Important:** The application validates required startup config before opening database connections or starting the HTTP server. Missing or malformed `PORT`, `MONGO_HOST`, `MONGO_UM_DB_NAME`, `REDIS_HOST`, or `SECRET_KEY` will cause startup to fail fast.
 
