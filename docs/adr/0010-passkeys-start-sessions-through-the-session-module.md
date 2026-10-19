@@ -10,4 +10,4 @@ Decisions:
 - **Discoverable credentials, user verification required.** Login does not ask for a username; the authenticator offers the User's Passkeys. Registration requires a resident key and user verification. A sign-count that goes backwards (a cloned authenticator) refuses the login.
 - **Ceremonies live in Redis.** A Ceremony is stored for five minutes and consumed with `GETDEL`, so each challenge is answered once. Credentials live in MongoDB (`passkeys`), keyed by credential ID.
 
-Consequences: front ends that want Passkeys must be served under the RP ID (for example `port.devper.app`) and listed in `WEBAUTHN_RP_ORIGINS`. Services that proxy login (PortForMe) proxy the two login routes and keep binding their own System.
+Consequences: front ends that want Passkeys must be served under the RP ID and listed in `WEBAUTHN_RP_ORIGINS` — today `https://port.devper.app`, `https://um.devper.app` and `https://pharm.devper.app`. um-web registers Passkeys; every listed front end can sign in with the same one. Services that proxy login (PortForMe) proxy the two login routes and keep binding their own System.
