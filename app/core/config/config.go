@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -23,6 +24,9 @@ type AppConfig struct {
 	SecretKey      string
 	GatewayHosts   string
 	LockoutEnabled bool
+	WebAuthnRPID   string
+	WebAuthnRPName string
+	WebAuthnOrigin []string
 }
 
 func LoadAppConfig() (*AppConfig, error) {
@@ -36,6 +40,9 @@ func LoadAppConfig() (*AppConfig, error) {
 		SecretKey:      strings.TrimSpace(os.Getenv("SECRET_KEY")),
 		GatewayHosts:   strings.TrimSpace(os.Getenv("GATEWAY_HOSTS")),
 		LockoutEnabled: LoginLockoutEnabled(),
+		WebAuthnRPID:   strings.TrimSpace(os.Getenv("WEBAUTHN_RP_ID")),
+		WebAuthnRPName: strings.TrimSpace(os.Getenv("WEBAUTHN_RP_NAME")),
+		WebAuthnOrigin: splitList(os.Getenv("WEBAUTHN_RP_ORIGINS")),
 	}
 	if err := cfg.Validate(); err != nil {
 		return nil, err
@@ -72,7 +79,40 @@ func (c *AppConfig) Validate() error {
 	if c.SecretKey == "" {
 		return fmt.Errorf("SECRET_KEY is required")
 	}
+	return c.validateWebAuthn()
+}
+
+// validateWebAuthn: Passkeys are optional (ADR-0010). With an RP ID set,
+// every allowed origin must be HTTPS (or localhost for development) and on
+// the RP ID's domain, since browsers refuse any other.
+func (c *AppConfig) validateWebAuthn() error {
+	if c.WebAuthnRPID == "" {
+		return nil
+	}
+	if len(c.WebAuthnOrigin) == 0 {
+		return errors.New("WEBAUTHN_RP_ORIGINS is required when WEBAUTHN_RP_ID is set")
+	}
+	for _, origin := range c.WebAuthnOrigin {
+		u, err := url.Parse(origin)
+		if err != nil || u.Host == "" || u.Path != "" || (u.Scheme != "https" && !(u.Scheme == "http" && u.Hostname() == "localhost")) {
+			return fmt.Errorf("WEBAUTHN_RP_ORIGINS: %q must be an https origin", origin)
+		}
+		host := u.Hostname()
+		if host != c.WebAuthnRPID && !strings.HasSuffix(host, "."+c.WebAuthnRPID) {
+			return fmt.Errorf("WEBAUTHN_RP_ORIGINS: %q is not on %q", origin, c.WebAuthnRPID)
+		}
+	}
 	return nil
+}
+
+func splitList(value string) []string {
+	var out []string
+	for _, item := range strings.Split(value, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func (c *AppConfig) ListenAddr() string {

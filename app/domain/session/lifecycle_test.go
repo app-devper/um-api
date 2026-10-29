@@ -236,3 +236,52 @@ func TestEndOtherChecksOwnership(t *testing.T) {
 		t.Fatalf("missing session: %v", err)
 	}
 }
+
+// A Passkey login applies the password login's rules except the password
+// and the lockout (ADR-0010).
+func TestStartWithPasskeyAppliesTheLoginRules(t *testing.T) {
+	l := newLogin(t)
+	alice := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	bob := l.user(t, "bob", constant.USER, "123", constant.INACTIVE)
+	root := l.user(t, "root", constant.SUPER, constant.SuperClientId, constant.ACTIVE)
+	cases := []struct {
+		name, userId, system string
+		want                 error
+	}{
+		{"unknown user", primitive.NewObjectID().Hex(), "POS", ErrWrongCredentials},
+		{"inactive", bob.Id.Hex(), "POS", ErrNotActive},
+		{"system the client lacks", alice.Id.Hex(), "SM", ErrWrongSystem},
+		{"super outside SM", root.Id.Hex(), "POS", ErrWrongSystem},
+	}
+	for _, c := range cases {
+		if _, err := l.m.StartWithPasskey(c.userId, c.system, Metadata{}); !errors.Is(err, c.want) {
+			t.Errorf("%s: got %v, want %v", c.name, err, c.want)
+		}
+	}
+	if l.store.count() != 0 {
+		t.Fatal("a refused passkey login left a Session")
+	}
+	token, err := l.m.StartWithPasskey(alice.Id.Hex(), "POS", Metadata{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := l.m.Verify(token); err != nil || p.UserId != alice.Id.Hex() || p.System != "POS" {
+		t.Fatalf("principal %+v err %v", p, err)
+	}
+}
+
+// The lockout counts wrong passwords; a locked account can still use its
+// Passkey, and a Passkey login does not reset the password count.
+func TestStartWithPasskeyIgnoresTheLockout(t *testing.T) {
+	l := newLogin(t)
+	alice := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	for i := 0; i < repository.LoginMaxFails; i++ {
+		_, _ = l.start("alice", "wrong", "POS")
+	}
+	if _, err := l.m.StartWithPasskey(alice.Id.Hex(), "POS", Metadata{}); err != nil {
+		t.Fatalf("passkey while password-locked: %v", err)
+	}
+	if _, err := l.start("alice", "right-password", "POS"); !errors.Is(err, ErrLocked) {
+		t.Fatalf("password lockout was reset: %v", err)
+	}
+}

@@ -50,6 +50,20 @@ components:
       bearerFormat: JWT
 
   schemas:
+    PasskeyOptions:
+      type: object
+      properties:
+        ceremonyId: { type: string }
+        options:
+          type: object
+          description: WebAuthn options; `publicKey` holds base64url-encoded binary fields
+    Passkey:
+      type: object
+      properties:
+        id: { type: string, description: base64url credential ID }
+        name: { type: string }
+        createdDate: { type: string, format: date-time }
+        lastUsedDate: { type: string, format: date-time }
     AppError:
       type: object
       properties:
@@ -717,6 +731,139 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "500":
           $ref: "#/components/responses/InternalServerError"
+
+  /auth/passkey/login/options:
+    post:
+      tags: [Auth]
+      summary: Start a passkey login
+      description: |
+        Starts a username-less WebAuthn login on a System (ADR-0010). Pass `options.publicKey` to `navigator.credentials.get` and answer within 5 minutes. Rate limited to 10/min per IP. 404 `UM-404-002` when passkeys are not enabled.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [system]
+              properties:
+                system: { type: string, example: PORT }
+      responses:
+        "200":
+          description: Ceremony started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyOptions"
+        "404":
+          description: Passkeys not enabled (`UM-404-002`)
+  /auth/passkey/login:
+    post:
+      tags: [Auth]
+      summary: Finish a passkey login
+      description: |
+        Verifies the assertion and starts a Session under the same rules as `/auth/login` (ACTIVE, System membership, SUPER only in SM), without the password lockout. `401 UM-401-005` when the assertion does not verify; `400 UM-400-006` when the ceremony expired or was already used.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ceremonyId, credential]
+              properties:
+                ceremonyId: { type: string }
+                credential: { type: object, description: "PublicKeyCredential as JSON (base64url fields)" }
+      responses:
+        "200":
+          description: Session started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+        "400":
+          description: Ceremony expired or reused (`UM-400-006`)
+        "401":
+          description: Passkey not accepted (`UM-401-005`) or login refused (`UM-401-004`)
+  /auth/passkeys/options:
+    post:
+      tags: [Auth]
+      summary: Start registering a passkey
+      description: Requires the current password. Pass `options.publicKey` to `navigator.credentials.create`.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: { type: string }
+      responses:
+        "200":
+          description: Ceremony started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyOptions"
+        "400":
+          description: Wrong password (`UM-400-002`)
+  /auth/passkeys:
+    post:
+      tags: [Auth]
+      summary: Finish registering a passkey
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ceremonyId, credential]
+              properties:
+                ceremonyId: { type: string }
+                name: { type: string, maxLength: 60 }
+                credential: { type: object }
+      responses:
+        "201":
+          description: Passkey stored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Passkey"
+    get:
+      tags: [Auth]
+      summary: List own passkeys
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Passkeys
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Passkey"
+  /auth/passkeys/{id}:
+    delete:
+      tags: [Auth]
+      summary: Delete one of own passkeys
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found (`UM-404-001`)
 
   /auth/sso-ticket:
     post:
