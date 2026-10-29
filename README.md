@@ -45,7 +45,8 @@ Domain language and decisions: [Identity context](./CONTEXT.md), [Architecture n
 | GET    | `/verify`          | Yes  | Verify the caller's live session (for services) |
 | GET    | `/system`          | Yes  | Get current system                            |
 | POST   | `/verify-password` | Yes  | Verify user password                          |
-| POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s)   |
+| POST   | `/sso-ticket`      | Yes  | Issue one-time SSO handoff ticket (TTL 60s); optional `system` opens another System |
+| GET    | `/systems`         | Yes  | Systems the caller may launch from here (ADR-0011) |
 | POST   | `/exchange`        | No   | Exchange SSO ticket for a new access token    |
 | GET    | `/sessions`        | Yes  | List own active sessions (all devices)        |
 | DELETE | `/sessions`        | Yes  | Sign out everywhere else (keep current)       |
@@ -233,6 +234,8 @@ curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
 #    ticket for a fresh access token and drop the user on /profile
 window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}&return=/profile`;
 ```
+
+To **launch another System from UM** (ADR-0011), list what the caller may open with `GET /auth/systems`, request `POST /auth/sso-ticket {"system":"PORT"}`, and send the browser to `<host>/sso?ticket=<ticket>`; the target app exchanges it for its own Session.
 
 Tickets are one-shot — `POST /auth/exchange` deletes them on first use and returns `UM-401-002` on replay or after the 60-second TTL expires.
 

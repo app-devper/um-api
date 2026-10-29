@@ -117,9 +117,12 @@ func (m *Manager) StartWithPasskey(userId, system string, meta Metadata) (string
 	return m.Issue(user, system, meta)
 }
 
-// Resume starts a Session for a User who already holds one on the System,
-// as an SSO ticket carries: the User must still be ACTIVE and allowed on it.
+// Resume starts a Session on the System an SSO ticket names (ADR-0011): the
+// User must still be ACTIVE and pass the login rules for that System.
 func (m *Manager) Resume(userId, system string, meta Metadata) (string, error) {
+	if m.systems == nil {
+		return "", errors.New("session manager has no login (WithLogin)")
+	}
 	user, err := m.users.GetUserById(userId)
 	if err != nil || user == nil {
 		return "", ErrSessionInvalid
@@ -127,7 +130,7 @@ func (m *Manager) Resume(userId, system string, meta Metadata) (string, error) {
 	if user.Status != constant.ACTIVE {
 		return "", ErrUserInactive
 	}
-	if !systemAllowed(user.Role, system) {
+	if m.eligible(user, system) != nil {
 		return "", ErrSessionInvalid
 	}
 	return m.Issue(user, system, meta)

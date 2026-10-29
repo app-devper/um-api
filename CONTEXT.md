@@ -44,6 +44,10 @@ _Avoid_: Implicit pharmacy tenant access
 A WebAuthn credential a User registers for themselves. It starts a Session on a System without a password, under the same rules as a password login except the lockout (ADR-0010). It belongs to one User and to the relying party domain UM is configured with, not to a System.
 _Avoid_: Biometric login, security key (one kind of authenticator that can hold a passkey)
 
+**Launch**:
+Opening another System from UM without signing in again: UM issues an SSO ticket that names the target System, and the target app exchanges it for its own Session (ADR-0011). Only Systems of the User's Client that the User may use and that have a host can be launched.
+_Avoid_: Cross-system login, impersonation
+
 **Ceremony**:
 One WebAuthn round trip: UM issues a challenge, the authenticator answers it once, and UM checks the answer. A Ceremony expires after five minutes and can be answered only once.
 _Avoid_: Challenge session

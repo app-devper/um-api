@@ -39,7 +39,8 @@ func ApplyAuthAPI(
 
 	route := protected.Group("auth")
 
-	route.POST("/sso-ticket", usecase.CreateSSOTicket(ssoEntity))
+	route.POST("/sso-ticket", usecase.CreateSSOTicket(sessions, ssoEntity))
+	route.GET("/systems", usecase.LaunchableSystems(sessions))
 	route.GET("/keep-alive", usecase.KeepAlive(sessions))
 	route.GET("/verify", usecase.VerifySession())
 	route.GET("/system", usecase.GetSystem(systemEntity))

@@ -27,10 +27,19 @@ func (u *loginUsers) GetUserByUsername(username string) (*model.User, error) {
 	return nil, mongo.ErrNoDocuments
 }
 
-// systems lists which Systems each Client has.
+// systems lists which Systems each Client has, and where each one is served.
 type systems struct {
 	repository.ISystem
 	byClient map[string][]string
+	hosts    map[string]string
+}
+
+func (s *systems) GetSystemsByClientId(clientId string) ([]model.System, error) {
+	var found []model.System
+	for _, c := range s.byClient[clientId] {
+		found = append(found, model.System{ClientId: clientId, SystemCode: c, SystemName: c + " app", Host: s.hosts[c]})
+	}
+	return found, nil
 }
 
 func (s *systems) GetSystem(clientId, code string) (*model.System, error) {
