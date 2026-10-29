@@ -157,17 +157,17 @@ func LaunchableSystems(sessions *session.Manager) gin.HandlerFunc {
 		}
 		items := make([]LaunchableSystem, 0, len(systems))
 		for _, s := range systems {
-			items = append(items, LaunchableSystem{SystemCode: s.SystemCode, SystemName: s.SystemName, Host: s.Host})
+			items = append(items, LaunchableSystem{SystemCode: s.SystemCode, SystemName: s.SystemName, WebUrl: s.WebUrl})
 		}
 		ctx.JSON(http.StatusOK, items)
 	}
 }
 
-// LaunchableSystem is a System the caller may open, served at Host.
+// LaunchableSystem is a System the caller may open, its front end served at WebUrl.
 type LaunchableSystem struct {
 	SystemCode string `json:"systemCode"`
 	SystemName string `json:"systemName"`
-	Host       string `json:"host"`
+	WebUrl     string `json:"webUrl"`
 }
 
 // respondLaunchError answers a refused ticket: a System the User may not use

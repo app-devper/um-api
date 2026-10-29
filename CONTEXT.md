@@ -45,7 +45,7 @@ A WebAuthn credential a User registers for themselves. It starts a Session on a 
 _Avoid_: Biometric login, security key (one kind of authenticator that can hold a passkey)
 
 **Launch**:
-Opening another System from UM without signing in again: UM issues an SSO ticket that names the target System, and the target app exchanges it for its own Session (ADR-0011). Only Systems of the User's Client that the User may use and that have a host can be launched.
+Opening another System from UM without signing in again: UM issues an SSO ticket that names the target System, and the target app exchanges it for its own Session (ADR-0011). Only Systems of the User's Client that the User may use and that have a web URL can be launched. A System's host is its API; its web URL is its front end.
 _Avoid_: Cross-system login, impersonation
 
 **Ceremony**:

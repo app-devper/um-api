@@ -151,8 +151,8 @@ func TestExchangeSSOTicketRejectsInactiveUser(t *testing.T) {
 // ssoManager is a session Manager whose Client "123" has Systems UM and POS.
 func ssoManager(secret string, sessions repository.ISession, users repository.IUser) *session.Manager {
 	systems := &authTestSystemRepo{byClient: map[string][]model.System{"123": {
-		{ClientId: "123", SystemCode: "UM", SystemName: "User Management", Host: "https://um.devper.app"},
-		{ClientId: "123", SystemCode: "POS", SystemName: "Point of Sale", Host: "https://pos.devper.app/"},
+		{ClientId: "123", SystemCode: "UM", SystemName: "User Management", Host: "https://api.devper.app", WebUrl: "https://um.devper.app"},
+		{ClientId: "123", SystemCode: "POS", SystemName: "Point of Sale", Host: "https://pos-api.devper.app", WebUrl: "https://pos.devper.app/"},
 	}}}
 	return session.NewManager(secret, sessions, users, session.WithLogin(systems, nil))
 }
@@ -212,7 +212,7 @@ func TestLaunchableSystemsListsTheOtherSystemsWithTheirOrigin(t *testing.T) {
 
 	LaunchableSystems(ssoManager("test-secret", &authTestSessionRepo{}, &authTestUserRepo{user: user}))(c)
 
-	want := `[{"systemCode":"POS","systemName":"Point of Sale","host":"https://pos.devper.app"}]`
+	want := `[{"systemCode":"POS","systemName":"Point of Sale","webUrl":"https://pos.devper.app"}]`
 	if w.Code != http.StatusOK || w.Body.String() != want {
 		t.Fatalf("got %d %s, want %s", w.Code, w.Body.String(), want)
 	}

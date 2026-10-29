@@ -21,7 +21,7 @@ func launchLogin(t *testing.T) *login {
 	return l
 }
 
-func TestLaunchableListsOtherSystemsWithAUsableHost(t *testing.T) {
+func TestLaunchableListsOtherSystemsWithAUsableWebUrl(t *testing.T) {
 	l := launchLogin(t)
 	u := l.user(t, "alice", constant.USER, "123", constant.ACTIVE)
 
@@ -34,8 +34,8 @@ func TestLaunchableListsOtherSystemsWithAUsableHost(t *testing.T) {
 		t.Fatalf("got %+v, want %v", got, want)
 	}
 	for _, s := range got {
-		if want[s.SystemCode] != s.Host {
-			t.Fatalf("%s: host %q, want %q", s.SystemCode, s.Host, want[s.SystemCode])
+		if want[s.SystemCode] != s.WebUrl {
+			t.Fatalf("%s: webUrl %q, want %q", s.SystemCode, s.WebUrl, want[s.SystemCode])
 		}
 	}
 }

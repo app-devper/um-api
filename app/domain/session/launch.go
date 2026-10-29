@@ -9,7 +9,8 @@ import (
 
 // Launchable lists the Systems a User may open from the current one (ADR-0011):
 // the other Systems of the User's Client that the User may use and that have a
-// usable Host. Each Host is reduced to its origin.
+// usable WebUrl (the address of its front end; Host is its API). Each
+// WebUrl is reduced to its origin.
 func (m *Manager) Launchable(userId, current string) ([]model.System, error) {
 	if m.systems == nil {
 		return nil, errors.New("session manager has no login (WithLogin)")
@@ -27,11 +28,11 @@ func (m *Manager) Launchable(userId, current string) ([]model.System, error) {
 	}
 	launchable := []model.System{}
 	for _, s := range all {
-		origin, ok := launchOrigin(s.Host)
+		origin, ok := launchOrigin(s.WebUrl)
 		if s.SystemCode == current || !ok || !systemAllowed(user.Role, s.SystemCode) {
 			continue
 		}
-		s.Host = origin
+		s.WebUrl = origin
 		launchable = append(launchable, s)
 	}
 	return launchable, nil
@@ -52,8 +53,8 @@ func (m *Manager) Admit(userId, system string) error {
 
 // launchOrigin accepts an https origin, or http on a loopback host for local
 // development, and drops any path, query or credentials.
-func launchOrigin(host string) (string, bool) {
-	u, err := url.Parse(host)
+func launchOrigin(webUrl string) (string, bool) {
+	u, err := url.Parse(webUrl)
 	if err != nil || u.Hostname() == "" || u.User != nil {
 		return "", false
 	}

@@ -235,7 +235,7 @@ curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
 window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}&return=/profile`;
 ```
 
-To **launch another System from UM** (ADR-0011), list what the caller may open with `GET /auth/systems`, request `POST /auth/sso-ticket {"system":"PORT"}`, and send the browser to `<host>/sso?ticket=<ticket>`; the target app exchanges it for its own Session.
+To **launch another System from UM** (ADR-0011), list what the caller may open with `GET /auth/systems`, request `POST /auth/sso-ticket {"system":"PORT"}`, and send the browser to `<webUrl>/sso?ticket=<ticket>` (`webUrl` is the System's front end; `host` stays its API); the target app exchanges it for its own Session.
 
 Tickets are one-shot — `POST /auth/exchange` deletes them on first use and returns `UM-401-002` on replay or after the 60-second TTL expires.
 

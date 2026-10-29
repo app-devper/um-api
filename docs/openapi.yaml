@@ -340,6 +340,11 @@ components:
           type: string
         host:
           type: string
+          description: Address of the System's API.
+        webUrl:
+          type: string
+          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
+          example: https://port.devper.app
 
     CreateSystemRequest:
       type: object
@@ -352,6 +357,11 @@ components:
           type: string
         host:
           type: string
+          description: Address of the System's API.
+        webUrl:
+          type: string
+          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
+          example: https://port.devper.app
       required:
         - clientId
         - systemName
@@ -365,6 +375,11 @@ components:
           type: string
         host:
           type: string
+          description: Address of the System's API.
+        webUrl:
+          type: string
+          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
+          example: https://port.devper.app
       required:
         - systemName
         - host
@@ -916,7 +931,7 @@ paths:
       tags: [Auth]
       summary: Systems the caller may launch
       description: |
-        The other Systems of the caller's Client that the caller may use and that have an https `host` (http only on localhost), each `host` reduced to its origin (ADR-0011). Open one with `POST /auth/sso-ticket {"system": code}` and `<host>/sso?ticket=…`.
+        The other Systems of the caller's Client that the caller may use and that have an https `webUrl` (http only on localhost), each `webUrl` reduced to its origin (ADR-0011). Open one with `POST /auth/sso-ticket {"system": code}` and `<webUrl>/sso?ticket=…`.
       security:
         - BearerAuth: []
       responses:
@@ -935,7 +950,7 @@ paths:
                     systemName:
                       type: string
                       example: PortForMe
-                    host:
+                    webUrl:
                       type: string
                       example: https://port.devper.app
         "401":
