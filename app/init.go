@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"um/app/core/config"
+	"um/app/domain/passkey"
 	"um/app/domain/repository"
 	"um/app/domain/session"
 	"um/app/domain/usecase"
@@ -56,11 +57,19 @@ func (app Routes) StartGin() {
 	loginGuard := repository.NewLoginGuardEntity(resource, cfg.LockoutEnabled)
 	ssoEntity := repository.NewSSOTicketEntity(resource)
 	sessions := session.NewManager(cfg.SecretKey, sessionEntity, userEntity, session.WithLogin(systemEntity, loginGuard))
+	passkeyEntity := repository.NewPasskeyEntity(resource)
+	passkeys, err := passkey.New(passkey.Config{RPID: cfg.WebAuthnRPID, RPName: cfg.WebAuthnRPName, Origins: cfg.WebAuthnOrigin},
+		passkeyEntity, repository.NewPasskeyCeremonyEntity(resource), userEntity, sessions)
+	if err != nil {
+		logrus.Fatal(err)
+	}
 	admin := useradmin.New(userEntity, sessions, systemEntity, loginGuard)
+	useradmin.WithPasskeys(passkeyEntity)(admin)
 
 	protectedRoute := publicRoute.Group("", usecase.RequireSession(sessions))
 
 	api.ApplyAuthAPI(publicRoute, protectedRoute, sessions, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
+	api.ApplyPasskeyAPI(publicRoute, protectedRoute, passkeys, resource.RdDB)
 	api.ApplyUserAPI(protectedRoute, userEntity, admin)
 	api.ApplySystemAPI(protectedRoute, systemEntity)
 
