@@ -38,7 +38,7 @@ func PasskeyLogin(passkeys *passkey.Service) gin.HandlerFunc {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
-		token, err := passkeys.FinishLogin(req.CeremonyId, req.Credential, sessionMetadata(ctx))
+		token, err := passkeys.FinishLogin(req.CeremonyId, req.Credential, req.Username, sessionMetadata(ctx))
 		if err != nil {
 			respondPasskeyError(ctx, err)
 			return
@@ -116,6 +116,8 @@ func respondPasskeyError(ctx *gin.Context, err error) {
 	case errors.Is(err, passkey.ErrNotAccepted):
 		logrus.Warn(err)
 		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrPasskeyRejected, passkey.ErrNotAccepted.Error()))
+	case errors.Is(err, passkey.ErrOtherAccount):
+		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrPasskeyOtherAccount, passkey.ErrOtherAccount.Error()))
 	case errors.Is(err, passkey.ErrNotFound):
 		errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, err.Error()))
 	default:

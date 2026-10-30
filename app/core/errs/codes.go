@@ -2,11 +2,12 @@ package errs
 
 const (
 	// 401 Unauthorized
-	ErrMissingAuthHeader = "UM-401-001"
-	ErrTokenInvalid      = "UM-401-002"
-	ErrSessionInvalid    = "UM-401-003"
-	ErrWrongCredentials  = "UM-401-004"
-	ErrPasskeyRejected   = "UM-401-005" // the authenticator's answer did not verify
+	ErrMissingAuthHeader   = "UM-401-001"
+	ErrTokenInvalid        = "UM-401-002"
+	ErrSessionInvalid      = "UM-401-003"
+	ErrWrongCredentials    = "UM-401-004"
+	ErrPasskeyRejected     = "UM-401-005" // the authenticator's answer did not verify
+	ErrPasskeyOtherAccount = "UM-401-006" // the passkey verified but belongs to a different User than the typed username
 
 	// 400 Bad Request
 	ErrBadRequest      = "UM-400-001"

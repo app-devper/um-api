@@ -53,7 +53,7 @@ Domain language and decisions: [Identity context](./CONTEXT.md), [Architecture n
 | DELETE | `/sessions/:id`    | Yes  | Revoke a specific own session                 |
 | POST   | `/logout`          | Yes  | Logout and end session                       |
 | POST   | `/passkey/login/options` | No | Start a username-less passkey login on a System (`{system}` → `{ceremonyId, options}`) |
-| POST   | `/passkey/login`   | No   | Finish it (`{ceremonyId, credential}` → `{accessToken}`) |
+| POST   | `/passkey/login`   | No   | Finish it (`{ceremonyId, credential, username?}` → `{accessToken}`); a typed `username` must own the passkey |
 | POST   | `/passkeys/options`| Yes  | Start registering a passkey (`{password}` → `{ceremonyId, options}`) |
 | POST   | `/passkeys`        | Yes  | Finish registering (`{ceremonyId, name, credential}` → passkey) |
 | GET    | `/passkeys`        | Yes  | List own passkeys                             |
