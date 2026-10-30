@@ -24,6 +24,8 @@ type PasskeyLoginOptions struct {
 type PasskeyLogin struct {
 	CeremonyId string          `json:"ceremonyId" binding:"required"`
 	Credential json.RawMessage `json:"credential" binding:"required"`
+	// Username, when the login page had one typed, must own the passkey.
+	Username string `json:"username"`
 }
 
 type PasskeyRegistrationOptions struct {

@@ -158,11 +158,36 @@ func (f *fixture) register(user *model.User, a *softAuthenticator) model.Passkey
 
 func (f *fixture) login(a *softAuthenticator, system string) (string, error) {
 	f.t.Helper()
+	return f.loginAs(a, system, "")
+}
+
+func (f *fixture) loginAs(a *softAuthenticator, system, username string) (string, error) {
+	f.t.Helper()
 	options, err := f.service.BeginLogin(system)
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	return f.service.FinishLogin(options.CeremonyId, a.get(options.PublicKey), session.Metadata{})
+	return f.service.FinishLogin(options.CeremonyId, a.get(options.PublicKey), username, session.Metadata{})
+}
+
+// A username typed on the login page must own the passkey that answers, so a
+// passkey picked by mistake cannot sign in as somebody else.
+func TestATypedUsernameMustOwnThePasskey(t *testing.T) {
+	f := newFixture(t)
+	alice := f.user("alice", constant.ACTIVE)
+	f.user("bob", constant.ACTIVE)
+	a := newSoftAuthenticator(t, rpID, origin)
+	f.register(alice, a)
+
+	if _, err := f.loginAs(a, "PORT", " alice "); err != nil {
+		t.Errorf("own username with spaces: %v", err)
+	}
+	if _, err := f.loginAs(a, "PORT", "bob"); !errors.Is(err, ErrOtherAccount) {
+		t.Errorf("another user's name: %v", err)
+	}
+	if _, err := f.loginAs(a, "PORT", "nobody"); !errors.Is(err, ErrOtherAccount) {
+		t.Errorf("unknown name: %v", err)
+	}
 }
 
 func TestRegisteredPasskeyStartsAVerifiableSession(t *testing.T) {
@@ -217,10 +242,10 @@ func TestACeremonyIsAnsweredOnceAndOnlyByItsUser(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertion := a.get(login.PublicKey)
-	if _, err := f.service.FinishLogin(login.CeremonyId, assertion, session.Metadata{}); err != nil {
+	if _, err := f.service.FinishLogin(login.CeremonyId, assertion, "", session.Metadata{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.service.FinishLogin(login.CeremonyId, assertion, session.Metadata{}); !errors.Is(err, ErrCeremony) {
+	if _, err := f.service.FinishLogin(login.CeremonyId, assertion, "", session.Metadata{}); !errors.Is(err, ErrCeremony) {
 		t.Fatalf("login replayed: %v", err)
 	}
 }
