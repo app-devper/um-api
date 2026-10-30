@@ -30,6 +30,9 @@ var (
 	ErrCeremony = errors.New("passkey request expired, start again")
 	// ErrNotAccepted: the authenticator's answer did not verify.
 	ErrNotAccepted = errors.New("passkey not accepted")
+	// ErrOtherAccount: the passkey verified but belongs to a different User
+	// than the username typed on the login page.
+	ErrOtherAccount = errors.New("this passkey belongs to a different account")
 	// ErrNotFound: the User has no such Passkey.
 	ErrNotFound = errors.New("passkey not found")
 )
@@ -190,8 +193,10 @@ func (s *Service) BeginLogin(system string) (Options, error) {
 }
 
 // FinishLogin verifies the assertion, records the new sign count, and starts
-// a Session through the session module, which applies the login rules.
-func (s *Service) FinishLogin(ceremonyId string, response []byte, meta session.Metadata) (string, error) {
+// a Session through the session module, which applies the login rules. A
+// non-empty username is the one typed on the login page: the passkey's owner
+// must be that User (ADR-0010).
+func (s *Service) FinishLogin(ceremonyId string, response []byte, username string, meta session.Metadata) (string, error) {
 	if !s.Enabled() {
 		return "", ErrDisabled
 	}
@@ -204,6 +209,7 @@ func (s *Service) FinishLogin(ceremonyId string, response []byte, meta session.M
 		return "", fmt.Errorf("%w: %v", ErrNotAccepted, err)
 	}
 	var key *model.Passkey
+	var owner *model.User
 	handler := func(rawID, userHandle []byte) (webauthn.User, error) {
 		found, err := s.keys.Get(b64.EncodeToString(rawID))
 		if err != nil {
@@ -221,6 +227,7 @@ func (s *Service) FinishLogin(ceremonyId string, response []byte, meta session.M
 			return nil, err
 		}
 		key = found
+		owner = user
 		return &account{user: user, credentials: []webauthn.Credential{credential}}, nil
 	}
 	_, credential, err := s.wa.ValidatePasskeyLogin(handler, state.Session, parsed)
@@ -229,6 +236,9 @@ func (s *Service) FinishLogin(ceremonyId string, response []byte, meta session.M
 	}
 	if credential.Authenticator.CloneWarning {
 		return "", fmt.Errorf("%w: sign count went backwards", ErrNotAccepted)
+	}
+	if typed := utils.NormalizeUsername(username); typed != "" && typed != owner.Username {
+		return "", ErrOtherAccount
 	}
 	stored, err := json.Marshal(credential)
 	if err != nil {
