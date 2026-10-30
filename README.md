@@ -279,3 +279,11 @@ um-api/
 ## Related
 
 - Web console: [`um-web`](../um-web) — Next.js 16 + shadcn/ui frontend that consumes this API
+
+## Agent skills
+
+The generic Claude Code / Codex skills (`coding-standards`, `tdd-workflow`,
+`grilling`, …) and the `ecc` rules are not in this repo. Every app-devper
+repo shares them from [app-devper/agent-skills](https://github.com/app-devper/agent-skills):
+clone it and run its `install.sh` once per machine. Only the skills about this
+repo live in `.agents/skills/`: `dev-flow`, `git-flow`, `pr`.
