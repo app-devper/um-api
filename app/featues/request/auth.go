@@ -8,6 +8,11 @@ type Login struct {
 	System   string `json:"system" binding:"required"`
 }
 
+// SSOTicket optionally names the System the ticket opens (ADR-0011).
+type SSOTicket struct {
+	System string `json:"system" binding:"omitempty,max=50"`
+}
+
 type ExchangeTicket struct {
 	Ticket string `json:"ticket" binding:"required"`
 }

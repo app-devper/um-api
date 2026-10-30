@@ -340,6 +340,11 @@ components:
           type: string
         host:
           type: string
+          description: Address of the System's API.
+        webUrl:
+          type: string
+          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
+          example: https://port.devper.app
 
     CreateSystemRequest:
       type: object
@@ -352,6 +357,11 @@ components:
           type: string
         host:
           type: string
+          description: Address of the System's API.
+        webUrl:
+          type: string
+          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
+          example: https://port.devper.app
       required:
         - clientId
         - systemName
@@ -365,6 +375,11 @@ components:
           type: string
         host:
           type: string
+          description: Address of the System's API.
+        webUrl:
+          type: string
+          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
+          example: https://port.devper.app
       required:
         - systemName
         - host
@@ -875,8 +890,21 @@ paths:
         Typical use: `dpharm.web.app` calls this, then redirects the browser to `https://devper-um.web.app/sso?ticket={ticket}&return=/profile` so the user lands on their UM profile page without re-logging in.
 
         The ticket carries `{userId, role, clientId, system}` from the caller's current session. Exchange creates a brand-new session (different `sessionId`), so logging out on one front-end does not affect the other.
+
+        To launch another System (ADR-0011), send `{"system": "<code>"}`: the ticket then names that System once the caller passes its login rules (ACTIVE, the Client has the System, SUPER only in SM); otherwise `403 UM-403-002`.
       security:
         - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                system:
+                  type: string
+                  maxLength: 50
+                  example: PORT
       responses:
         "200":
           description: Ticket issued
@@ -893,8 +921,40 @@ paths:
                     example: 60
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The caller may not use the requested System (`UM-403-002`)
         "500":
           $ref: "#/components/responses/InternalServerError"
+
+  /auth/systems:
+    get:
+      tags: [Auth]
+      summary: Systems the caller may launch
+      description: |
+        The other Systems of the caller's Client that the caller may use and that have an https `webUrl` (http only on localhost), each `webUrl` reduced to its origin (ADR-0011). Open one with `POST /auth/sso-ticket {"system": code}` and `<webUrl>/sso?ticket=…`.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Launchable Systems
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    systemCode:
+                      type: string
+                      example: PORT
+                    systemName:
+                      type: string
+                      example: PortForMe
+                    webUrl:
+                      type: string
+                      example: https://port.devper.app
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /auth/exchange:
     post:

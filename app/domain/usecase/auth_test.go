@@ -192,6 +192,11 @@ func (r *authTestSystemRepo) GetSystem(clientId string, systemCode string) (*mod
 	if r.system != nil && r.system.ClientId == clientId && r.system.SystemCode == systemCode {
 		return r.system, nil
 	}
+	for _, s := range r.byClient[clientId] {
+		if s.SystemCode == systemCode {
+			return &s, nil
+		}
+	}
 	return nil, errors.New("not found")
 }
 func (r *authTestSystemRepo) CreateSystem(form request.System) (*model.System, error) {
@@ -569,7 +574,7 @@ func TestExchangeSSOTicketRemovesSessionWhenTokenGenerationFails(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/exchange", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	ExchangeSSOTicket(session.NewManager("", sessionRepo, userRepo), ssoRepo)(c)
+	ExchangeSSOTicket(ssoManager("", sessionRepo, userRepo), ssoRepo)(c)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d body=%s", w.Code, w.Body.String())

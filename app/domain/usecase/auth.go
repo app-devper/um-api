@@ -108,15 +108,31 @@ func Logout(sessions *session.Manager) gin.HandlerFunc {
 	}
 }
 
-// CreateSSOTicket hands the verified Session's User and System to another app
-// of the same System; RequireSession has already checked the User is ACTIVE.
-func CreateSSOTicket(ssoEntity repository.ISSOTicket) gin.HandlerFunc {
+// CreateSSOTicket hands the verified Session's User to another app: of the
+// same System, or of the System the body names once the User passes its
+// login rules (ADR-0011). RequireSession has already checked the User is ACTIVE.
+func CreateSSOTicket(sessions *session.Manager, ssoEntity repository.ISSOTicket) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
+		req := request.SSOTicket{}
+		if ctx.Request.ContentLength > 0 {
+			if err := ctx.ShouldBindJSON(&req); err != nil {
+				errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
+				return
+			}
+		}
+		system := ctx.GetString(middlewares.System)
+		if req.System != "" && req.System != system {
+			if err := sessions.Admit(ctx.GetString(middlewares.UserId), req.System); err != nil {
+				respondLaunchError(ctx, err)
+				return
+			}
+			system = req.System
+		}
 		payload := repository.TicketPayload{
 			UserId:   ctx.GetString(middlewares.UserId),
 			Role:     ctx.GetString(middlewares.Role),
 			ClientId: ctx.GetString(middlewares.ClientId),
-			System:   ctx.GetString(middlewares.System),
+			System:   system,
 		}
 		ticket, err := ssoEntity.Create(payload)
 		if err != nil {
@@ -129,6 +145,39 @@ func CreateSSOTicket(ssoEntity repository.ISSOTicket) gin.HandlerFunc {
 			"expiresIn": int(repository.SSOTicketTTL.Seconds()),
 		})
 	}
+}
+
+// LaunchableSystems lists the other Systems the caller may open (ADR-0011).
+func LaunchableSystems(sessions *session.Manager) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		systems, err := sessions.Launchable(ctx.GetString(middlewares.UserId), ctx.GetString(middlewares.System))
+		if err != nil {
+			respondSessionError(ctx, err)
+			return
+		}
+		items := make([]LaunchableSystem, 0, len(systems))
+		for _, s := range systems {
+			items = append(items, LaunchableSystem{SystemCode: s.SystemCode, SystemName: s.SystemName, WebUrl: s.WebUrl})
+		}
+		ctx.JSON(http.StatusOK, items)
+	}
+}
+
+// LaunchableSystem is a System the caller may open, its front end served at WebUrl.
+type LaunchableSystem struct {
+	SystemCode string `json:"systemCode"`
+	SystemName string `json:"systemName"`
+	WebUrl     string `json:"webUrl"`
+}
+
+// respondLaunchError answers a refused ticket: a System the User may not use
+// is forbidden, the rest are session errors.
+func respondLaunchError(ctx *gin.Context, err error) {
+	if errors.Is(err, session.ErrWrongSystem) || errors.Is(err, session.ErrNotActive) {
+		errs.Response(ctx, http.StatusForbidden, errs.New(errs.ErrNoPermission, "system not available to this user"))
+		return
+	}
+	respondSessionError(ctx, err)
 }
 
 // ExchangeSSOTicket starts a Session from a one-time ticket on the ticket's
