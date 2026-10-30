@@ -24,7 +24,7 @@ type ISystem interface {
 	GetSystemsByCode(systemCode string) ([]model.System, error)
 	GetSystemById(id string) (*model.System, error)
 	GetSystem(clientId string, systemCode string) (*model.System, error)
-	CreateSystem(form request.System) (*model.System, error)
+	CreateSystem(form request.System, systemName string) (*model.System, error)
 	RemoveSystemById(id string) (*model.System, error)
 	UpdateSystemById(id string, form request.UpdateSystem) (*model.System, error)
 }
@@ -145,7 +145,7 @@ func (entity systemEntity) GetSystemById(id string) (*model.System, error) {
 	return &item, nil
 }
 
-func (entity systemEntity) CreateSystem(form request.System) (*model.System, error) {
+func (entity systemEntity) CreateSystem(form request.System, systemName string) (*model.System, error) {
 	logrus.Info("CreateSystem")
 	ctx, cancel := utils.InitContext()
 	defer cancel()
@@ -153,10 +153,9 @@ func (entity systemEntity) CreateSystem(form request.System) (*model.System, err
 	createdBy, _ := primitive.ObjectIDFromHex(form.CreatedBy)
 	item := model.System{
 		Id:          id,
-		SystemName:  form.SystemName,
+		SystemName:  systemName,
 		SystemCode:  form.SystemCode,
 		Host:        form.Host,
-		WebUrl:      form.WebUrl,
 		ClientId:    form.ClientId,
 		CreatedBy:   createdBy,
 		CreatedDate: time.Now(),
@@ -203,9 +202,7 @@ func (entity systemEntity) UpdateSystemById(id string, form request.UpdateSystem
 		return nil, err
 	}
 
-	item.SystemName = form.SystemName
 	item.Host = form.Host
-	item.WebUrl = form.WebUrl
 	item.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
 	item.UpdatedDate = time.Now()
 

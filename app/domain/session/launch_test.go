@@ -4,24 +4,25 @@ import (
 	"errors"
 	"testing"
 	"um/app/core/constant"
+	"um/app/domain/model"
 )
 
 func launchLogin(t *testing.T) *login {
 	t.Helper()
 	l := newLogin(t)
 	sys := l.m.systems.(*systems)
-	sys.byClient["123"] = []string{"SM", "POS", "PHARMACY", "GOLD", "EVIL"}
-	sys.hosts = map[string]string{
-		"SM":       "https://um.devper.app",
-		"POS":      "https://pos.devper.app/some/path?x=1",
-		"PHARMACY": "",
-		"GOLD":     "http://localhost:5173",
-		"EVIL":     "javascript:alert(1)",
-	}
+	sys.byClient["123"] = []string{"SM", "POS", "PHARMACY", "GOLD", "EVIL", "UNLISTED"}
+	l.m.catalog = &catalog{entries: []model.SystemCatalogEntry{
+		{SystemCode: "SM", SystemName: "User Management", WebUrl: "https://um.devper.app"},
+		{SystemCode: "POS", SystemName: "Devper POS", WebUrl: "https://pos.devper.app/some/path?x=1"},
+		{SystemCode: "PHARMACY", SystemName: "Pharmacy App"},
+		{SystemCode: "GOLD", SystemName: "Devper Gold", WebUrl: "http://localhost:5173"},
+		{SystemCode: "EVIL", SystemName: "Evil", WebUrl: "javascript:alert(1)"},
+	}}
 	return l
 }
 
-func TestLaunchableListsOtherSystemsWithAUsableWebUrl(t *testing.T) {
+func TestLaunchableListsOtherSystemsWithTheCatalogsNameAndWebUrl(t *testing.T) {
 	l := launchLogin(t)
 	u := l.user(t, "alice", constant.USER, "123", constant.ACTIVE)
 
@@ -29,13 +30,17 @@ func TestLaunchableListsOtherSystemsWithAUsableWebUrl(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"POS": "https://pos.devper.app", "GOLD": "http://localhost:5173"}
+	want := map[string]model.System{
+		"POS":  {SystemCode: "POS", SystemName: "Devper POS", WebUrl: "https://pos.devper.app"},
+		"GOLD": {SystemCode: "GOLD", SystemName: "Devper Gold", WebUrl: "http://localhost:5173"},
+	}
 	if len(got) != len(want) {
 		t.Fatalf("got %+v, want %v", got, want)
 	}
 	for _, s := range got {
-		if want[s.SystemCode] != s.WebUrl {
-			t.Fatalf("%s: webUrl %q, want %q", s.SystemCode, s.WebUrl, want[s.SystemCode])
+		w := want[s.SystemCode]
+		if s.WebUrl != w.WebUrl || s.SystemName != w.SystemName {
+			t.Fatalf("%s: got %q %q, want %q %q", s.SystemCode, s.SystemName, s.WebUrl, w.SystemName, w.WebUrl)
 		}
 	}
 }
@@ -52,6 +57,17 @@ func TestLaunchableRefusesAnInactiveUser(t *testing.T) {
 func TestLaunchableGivesASuperNothingOutsideSM(t *testing.T) {
 	l := launchLogin(t)
 	u := l.user(t, "root", constant.SUPER, "123", constant.ACTIVE)
+
+	got, err := l.m.Launchable(u.Id.Hex(), "SM")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("got %+v, %v; want nothing", got, err)
+	}
+}
+
+func TestLaunchableWithoutACatalogListsNothing(t *testing.T) {
+	l := launchLogin(t)
+	l.m.catalog = nil
+	u := l.user(t, "alice", constant.USER, "123", constant.ACTIVE)
 
 	got, err := l.m.Launchable(u.Id.Hex(), "SM")
 	if err != nil || len(got) != 0 {

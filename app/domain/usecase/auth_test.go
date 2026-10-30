@@ -140,6 +140,7 @@ func (r *authTestSessionRepo) RevokeOtherSessions(userId string, currentSessionI
 type authTestSystemRepo struct {
 	system           *model.System
 	byClient         map[string][]model.System
+	byCode           map[string][]model.System
 	systemsResult    []model.System
 	systemsErr       error
 	createdSystem    *model.System
@@ -176,7 +177,7 @@ func (r *authTestSystemRepo) GetSystemsByClientId(clientId string) ([]model.Syst
 	return nil, nil
 }
 func (r *authTestSystemRepo) GetSystemsByCode(systemCode string) ([]model.System, error) {
-	panic("unexpected call")
+	return r.byCode[systemCode], nil
 }
 func (r *authTestSystemRepo) GetSystemById(id string) (*model.System, error) {
 	r.getByIdId = id
@@ -199,14 +200,14 @@ func (r *authTestSystemRepo) GetSystem(clientId string, systemCode string) (*mod
 	}
 	return nil, errors.New("not found")
 }
-func (r *authTestSystemRepo) CreateSystem(form request.System) (*model.System, error) {
+func (r *authTestSystemRepo) CreateSystem(form request.System, systemName string) (*model.System, error) {
 	if r.createErr != nil {
 		return nil, r.createErr
 	}
 	created := &model.System{
 		Id:         primitive.NewObjectID(),
 		ClientId:   form.ClientId,
-		SystemName: form.SystemName,
+		SystemName: systemName,
 		SystemCode: form.SystemCode,
 		Host:       form.Host,
 	}

@@ -122,7 +122,7 @@ func TestAddSystemCreates(t *testing.T) {
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middlewares.UserId, primitive.NewObjectID().Hex())
 
-	AddSystem(sysRepo)(c)
+	AddSystem(sysRepo, newFakeCatalog(model.SystemCatalogEntry{SystemCode: "UM", SystemName: "User Mgmt", Host: "https://um.example.com"}))(c)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -146,7 +146,7 @@ func TestAddSystemValidatesBody(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/system", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 
-	AddSystem(sysRepo)(c)
+	AddSystem(sysRepo, newFakeCatalog(model.SystemCatalogEntry{SystemCode: "UM", SystemName: "User Mgmt", Host: "https://um.example.com"}))(c)
 
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 validation error, got %d body=%s", w.Code, w.Body.String())
@@ -284,7 +284,7 @@ func TestUpdateSystemByIdValidatesBody(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
-	body, _ := json.Marshal(gin.H{"systemName": "only-name"}) // missing host
+	body, _ := json.Marshal(gin.H{"systemName": "only-name"})
 	c.Request = httptest.NewRequest(http.MethodPut, "/system/x", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Params = gin.Params{{Key: "id", Value: primitive.NewObjectID().Hex()}}

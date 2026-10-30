@@ -27,20 +27,27 @@ func (u *loginUsers) GetUserByUsername(username string) (*model.User, error) {
 	return nil, mongo.ErrNoDocuments
 }
 
-// systems lists which Systems each Client has, and where each front end is served.
+// systems lists which Systems each Client has.
 type systems struct {
 	repository.ISystem
 	byClient map[string][]string
-	hosts    map[string]string
 }
 
 func (s *systems) GetSystemsByClientId(clientId string) ([]model.System, error) {
 	var found []model.System
 	for _, c := range s.byClient[clientId] {
-		found = append(found, model.System{ClientId: clientId, SystemCode: c, SystemName: c + " app", Host: "https://api.example", WebUrl: s.hosts[c]})
+		found = append(found, model.System{ClientId: clientId, SystemCode: c, SystemName: c + " (client copy)", Host: "https://api.example"})
 	}
 	return found, nil
 }
+
+// catalog is the System catalog: where each code's front end is served.
+type catalog struct {
+	repository.ISystemCatalog
+	entries []model.SystemCatalogEntry
+}
+
+func (c *catalog) List() ([]model.SystemCatalogEntry, error) { return c.entries, nil }
 
 func (s *systems) GetSystem(clientId, code string) (*model.System, error) {
 	for _, c := range s.byClient[clientId] {
