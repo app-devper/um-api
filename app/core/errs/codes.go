@@ -23,6 +23,7 @@ const (
 
 	// 409 Conflict
 	ErrUsernameTaken = "UM-409-001"
+	ErrSystemInUse   = "UM-409-002" // a catalog System that Clients still have
 
 	// 404 Not Found
 	ErrNotFound         = "UM-404-001"

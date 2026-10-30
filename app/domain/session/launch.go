@@ -5,12 +5,19 @@ import (
 	"net/url"
 	"um/app/core/constant"
 	"um/app/domain/model"
+	"um/app/domain/repository"
 )
 
+// WithCatalog gives the Manager the System catalog, which says where each
+// System's front end is served (ADR-0012).
+func WithCatalog(catalog repository.ISystemCatalog) Option {
+	return func(m *Manager) { m.catalog = catalog }
+}
+
 // Launchable lists the Systems a User may open from the current one (ADR-0011):
-// the other Systems of the User's Client that the User may use and that have a
-// usable WebUrl (the address of its front end; Host is its API). Each
-// WebUrl is reduced to its origin.
+// the other Systems of the User's Client that the User may use and whose
+// catalog entry has a usable WebUrl (ADR-0012). Name and WebUrl come from the
+// catalog; each WebUrl is reduced to its origin.
 func (m *Manager) Launchable(userId, current string) ([]model.System, error) {
 	if m.systems == nil {
 		return nil, errors.New("session manager has no login (WithLogin)")
@@ -22,17 +29,29 @@ func (m *Manager) Launchable(userId, current string) ([]model.System, error) {
 	if user.Status != constant.ACTIVE {
 		return nil, ErrUserInactive
 	}
+	launchable := []model.System{}
+	if m.catalog == nil {
+		return launchable, nil
+	}
+	entries, err := m.catalog.List()
+	if err != nil {
+		return nil, err
+	}
+	byCode := make(map[string]model.SystemCatalogEntry, len(entries))
+	for _, e := range entries {
+		byCode[e.SystemCode] = e
+	}
 	all, err := m.systems.GetSystemsByClientId(user.ClientId)
 	if err != nil {
 		return nil, err
 	}
-	launchable := []model.System{}
 	for _, s := range all {
-		origin, ok := launchOrigin(s.WebUrl)
-		if s.SystemCode == current || !ok || !systemAllowed(user.Role, s.SystemCode) {
+		entry, listed := byCode[s.SystemCode]
+		origin, ok := launchOrigin(entry.WebUrl)
+		if !listed || !ok || s.SystemCode == current || !systemAllowed(user.Role, s.SystemCode) {
 			continue
 		}
-		s.WebUrl = origin
+		s.SystemName, s.WebUrl = entry.SystemName, origin
 		launchable = append(launchable, s)
 	}
 	return launchable, nil
