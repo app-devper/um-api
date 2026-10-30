@@ -156,6 +156,7 @@ func (entity systemEntity) CreateSystem(form request.System) (*model.System, err
 		SystemName:  form.SystemName,
 		SystemCode:  form.SystemCode,
 		Host:        form.Host,
+		WebUrl:      form.WebUrl,
 		ClientId:    form.ClientId,
 		CreatedBy:   createdBy,
 		CreatedDate: time.Now(),
@@ -204,6 +205,7 @@ func (entity systemEntity) UpdateSystemById(id string, form request.UpdateSystem
 
 	item.SystemName = form.SystemName
 	item.Host = form.Host
+	item.WebUrl = form.WebUrl
 	item.UpdatedBy, _ = primitive.ObjectIDFromHex(form.UpdatedBy)
 	item.UpdatedDate = time.Now()
 
