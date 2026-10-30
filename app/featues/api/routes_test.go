@@ -30,7 +30,7 @@ func TestEveryNonPublicRouteRequiresSession(t *testing.T) {
 
 	ApplyAuthAPI(public, protected, sessions, nil, nil, nil, nil, nil, nil)
 	ApplyUserAPI(protected, nil, useradmin.New(nil, nil, nil, nil))
-	ApplySystemAPI(protected, nil)
+	ApplySystemAPI(protected, nil, nil)
 
 	routes := r.Routes()
 	if len(routes) < 25 {

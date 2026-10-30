@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"errors"
 	"net/http"
 	"um/app/core/errs"
 	"um/app/domain/repository"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func GetSystem(systemEntity repository.ISystem) gin.HandlerFunc {
@@ -44,7 +46,9 @@ func GetSystems(systemEntity repository.ISystem) gin.HandlerFunc {
 	}
 }
 
-func AddSystem(systemEntity repository.ISystem) gin.HandlerFunc {
+// AddSystem gives a Client a System from the catalog (ADR-0012): the name is
+// the catalog's and Host defaults to the catalog's.
+func AddSystem(systemEntity repository.ISystem, catalog repository.ISystemCatalog) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.System{}
 		err := ctx.ShouldBind(&req)
@@ -52,11 +56,26 @@ func AddSystem(systemEntity repository.ISystem) gin.HandlerFunc {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, err.Error()))
 			return
 		}
+		entry, err := catalog.Get(req.SystemCode)
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, "system code is not in the catalog"))
+			return
+		}
+		if err != nil {
+			logrus.Error(err)
+			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
+			return
+		}
+		if req.Host == "" {
+			req.Host = entry.Host
+		}
+		if req.Host == "" {
+			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrBadRequest, "host is required: the catalog has no default for this system"))
+			return
+		}
 
-		userId := ctx.GetString(middlewares.UserId)
-
-		req.CreatedBy = userId
-		result, err := systemEntity.CreateSystem(req)
+		req.CreatedBy = ctx.GetString(middlewares.UserId)
+		result, err := systemEntity.CreateSystem(req, entry.SystemName)
 		if err != nil {
 			logrus.Error(err)
 			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))

@@ -11,7 +11,7 @@ type System struct {
 	SystemName  string             `bson:"systemName" json:"systemName"`
 	SystemCode  string             `bson:"systemCode" json:"systemCode"`
 	Host        string             `bson:"host" json:"host"`
-	WebUrl      string             `bson:"webUrl" json:"webUrl"`
+	WebUrl      string             `bson:"webUrl,omitempty" json:"-"`
 	CreatedBy   primitive.ObjectID `bson:"createdBy" json:"-"`
 	CreatedDate time.Time          `bson:"createdDate" json:"-"`
 	UpdatedBy   primitive.ObjectID `bson:"updatedBy" json:"-"`

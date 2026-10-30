@@ -6,9 +6,11 @@ import (
 	"um/app/domain/passkey"
 	"um/app/domain/repository"
 	"um/app/domain/session"
+	"um/app/domain/systemcatalog"
 	"um/app/domain/usecase"
 	"um/app/domain/useradmin"
 	"um/app/featues/api"
+	"um/app/featues/request"
 	"um/db"
 	"um/middlewares"
 
@@ -54,9 +56,11 @@ func (app Routes) StartGin() {
 	userEntity := repository.NewUserEntity(resource)
 	sessionEntity := repository.NewSessionEntity(resource)
 	systemEntity := repository.NewSystemEntity(resource)
+	catalogEntity := repository.NewSystemCatalogEntity(resource)
+	seedSystemCatalog(systemEntity, catalogEntity)
 	loginGuard := repository.NewLoginGuardEntity(resource, cfg.LockoutEnabled)
 	ssoEntity := repository.NewSSOTicketEntity(resource)
-	sessions := session.NewManager(cfg.SecretKey, sessionEntity, userEntity, session.WithLogin(systemEntity, loginGuard))
+	sessions := session.NewManager(cfg.SecretKey, sessionEntity, userEntity, session.WithLogin(systemEntity, loginGuard), session.WithCatalog(catalogEntity))
 	passkeyEntity := repository.NewPasskeyEntity(resource)
 	passkeys, err := passkey.New(passkey.Config{RPID: cfg.WebAuthnRPID, RPName: cfg.WebAuthnRPName, Origins: cfg.WebAuthnOrigin},
 		passkeyEntity, repository.NewPasskeyCeremonyEntity(resource), userEntity, sessions)
@@ -71,12 +75,30 @@ func (app Routes) StartGin() {
 	api.ApplyAuthAPI(publicRoute, protectedRoute, sessions, userEntity, sessionEntity, systemEntity, loginGuard, ssoEntity, resource.RdDB)
 	api.ApplyPasskeyAPI(publicRoute, protectedRoute, passkeys, resource.RdDB)
 	api.ApplyUserAPI(protectedRoute, userEntity, admin)
-	api.ApplySystemAPI(protectedRoute, systemEntity)
+	api.ApplySystemAPI(protectedRoute, systemEntity, catalogEntity)
 
 	r.NoRoute(middlewares.NoRoute())
 
 	err = r.Run(cfg.ListenAddr())
 	if err != nil {
 		logrus.Error(err)
+	}
+}
+
+// seedSystemCatalog adds a catalog entry for every System code Clients have
+// but the catalog lacks (ADR-0012); existing entries are left as they are.
+func seedSystemCatalog(systems repository.ISystem, catalog repository.ISystemCatalog) {
+	all, err := systems.GetSystems(request.GetSystems{})
+	if err != nil {
+		logrus.Errorf("system catalog seed: list systems: %v", err)
+		return
+	}
+	added, err := catalog.InsertMissing(systemcatalog.Seed(all))
+	if err != nil {
+		logrus.Errorf("system catalog seed: %v", err)
+		return
+	}
+	if added > 0 {
+		logrus.Infof("system catalog seed: added %d entries", added)
 	}
 }

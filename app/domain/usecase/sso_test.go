@@ -151,10 +151,14 @@ func TestExchangeSSOTicketRejectsInactiveUser(t *testing.T) {
 // ssoManager is a session Manager whose Client "123" has Systems UM and POS.
 func ssoManager(secret string, sessions repository.ISession, users repository.IUser) *session.Manager {
 	systems := &authTestSystemRepo{byClient: map[string][]model.System{"123": {
-		{ClientId: "123", SystemCode: "UM", SystemName: "User Management", Host: "https://api.devper.app", WebUrl: "https://um.devper.app"},
-		{ClientId: "123", SystemCode: "POS", SystemName: "Point of Sale", Host: "https://pos-api.devper.app", WebUrl: "https://pos.devper.app/"},
+		{ClientId: "123", SystemCode: "UM", SystemName: "User Management", Host: "https://api.devper.app"},
+		{ClientId: "123", SystemCode: "POS", SystemName: "Point of Sale", Host: "https://pos-api.devper.app"},
 	}}}
-	return session.NewManager(secret, sessions, users, session.WithLogin(systems, nil))
+	catalog := newFakeCatalog(
+		model.SystemCatalogEntry{SystemCode: "UM", SystemName: "User Management", WebUrl: "https://um.devper.app"},
+		model.SystemCatalogEntry{SystemCode: "POS", SystemName: "Point of Sale", WebUrl: "https://pos.devper.app/"},
+	)
+	return session.NewManager(secret, sessions, users, session.WithLogin(systems, nil), session.WithCatalog(catalog))
 }
 
 func ticketRequest(t *testing.T, user *model.User, body string) (*gin.Context, *httptest.ResponseRecorder) {

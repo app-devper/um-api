@@ -52,6 +52,7 @@ type Manager struct {
 	users     repository.IUser
 	systems   repository.ISystem
 	guard     repository.ILoginGuard
+	catalog   repository.ISystemCatalog
 	ttl       time.Duration
 }
 

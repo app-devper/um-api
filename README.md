@@ -95,6 +95,16 @@ Domain language and decisions: [Identity context](./CONTEXT.md), [Architecture n
 | DELETE | `/:id` | Yes  | SUPER | Delete system     |
 | PUT    | `/:id` | Yes  | SUPER | Update system     |
 
+`POST /` adds a System from the catalog to a Client: `{clientId, systemCode, host?}`; the name is the catalog's and `host` defaults to it.
+
+### System catalog (`/api/um/v1/system-catalog`, ADR-0012)
+
+| Method | Path     | Auth | Role  | Description |
+|--------|----------|------|-------|-------------|
+| GET    | `/`      | Yes  | SUPER | List one entry per System code (name, webUrl, default host) |
+| PUT    | `/:code` | Yes  | SUPER | Create or replace an entry; renames Clients' Systems of that code |
+| DELETE | `/:code` | Yes  | SUPER | Delete an entry no Client has (`409 UM-409-002` otherwise) |
+
 ## Error Codes
 
 All error responses follow the format:
@@ -235,7 +245,7 @@ curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
 window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}&return=/profile`;
 ```
 
-To **launch another System from UM** (ADR-0011), list what the caller may open with `GET /auth/systems`, request `POST /auth/sso-ticket {"system":"PORT"}`, and send the browser to `<webUrl>/sso?ticket=<ticket>` (`webUrl` is the System's front end; `host` stays its API); the target app exchanges it for its own Session.
+To **launch another System from UM** (ADR-0011), list what the caller may open with `GET /auth/systems`, request `POST /auth/sso-ticket {"system":"PORT"}`, and send the browser to `<webUrl>/sso?ticket=<ticket>`; `webUrl` comes from the System catalog (ADR-0012), set once per System code at `PUT /system-catalog/:code`; the target app exchanges it for its own Session.
 
 Tickets are one-shot — `POST /auth/exchange` deletes them on first use and returns `UM-401-002` on replay or after the 60-second TTL expires.
 

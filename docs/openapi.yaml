@@ -336,53 +336,66 @@ components:
           type: string
         systemName:
           type: string
+          description: Follows the System catalog entry of the code (ADR-0012).
         systemCode:
           type: string
         host:
           type: string
-          description: Address of the System's API.
-        webUrl:
-          type: string
-          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
-          example: https://port.devper.app
+          description: Address of the System's API for this Client.
 
     CreateSystemRequest:
       type: object
+      description: Adds a System from the catalog to a Client (ADR-0012).
       properties:
         clientId:
           type: string
-        systemName:
-          type: string
         systemCode:
           type: string
+          description: Must be in the System catalog.
         host:
           type: string
-          description: Address of the System's API.
-        webUrl:
-          type: string
-          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
-          example: https://port.devper.app
+          description: This Client's API address; defaults to the catalog entry's host.
       required:
         - clientId
-        - systemName
         - systemCode
-        - host
 
     UpdateSystemRequest:
       type: object
       properties:
+        host:
+          type: string
+      required:
+        - host
+
+    SystemCatalogEntry:
+      type: object
+      properties:
+        systemCode:
+          type: string
+          example: PORT
         systemName:
+          type: string
+          example: PortForMe
+        webUrl:
+          type: string
+          description: Address of the System's front end; the Apps launcher opens it (ADR-0011, ADR-0012).
+          example: https://port.devper.app
+        host:
+          type: string
+          description: API address a new Client starts with.
+
+    SaveSystemCatalogEntryRequest:
+      type: object
+      properties:
+        systemName:
+          type: string
+          maxLength: 100
+        webUrl:
           type: string
         host:
           type: string
-          description: Address of the System's API.
-        webUrl:
-          type: string
-          description: Address of the System's front end, used to launch it from UM (ADR-0011). Optional.
-          example: https://port.devper.app
       required:
         - systemName
-        - host
 
   responses:
     BadRequest:
@@ -931,7 +944,7 @@ paths:
       tags: [Auth]
       summary: Systems the caller may launch
       description: |
-        The other Systems of the caller's Client that the caller may use and that have an https `webUrl` (http only on localhost), each `webUrl` reduced to its origin (ADR-0011). Open one with `POST /auth/sso-ticket {"system": code}` and `<webUrl>/sso?ticket=…`.
+        The other Systems of the caller's Client that the caller may use and whose System catalog entry has an https `webUrl` (http only on localhost), with the catalog's name, each `webUrl` reduced to its origin (ADR-0011, ADR-0012). Open one with `POST /auth/sso-ticket {"system": code}` and `<webUrl>/sso?ticket=…`.
       security:
         - BearerAuth: []
       responses:
@@ -1537,3 +1550,74 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+  /system-catalog:
+    get:
+      tags: [System]
+      summary: List the System catalog
+      description: One entry per System code (ADR-0012). SUPER only.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Catalog entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SystemCatalogEntry"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /system-catalog/{code}:
+    put:
+      tags: [System]
+      summary: Create or replace a catalog entry
+      description: Renames every Client's System of that code to the entry's name. SUPER only.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: "^[A-Z0-9][A-Z0-9_-]{0,49}$"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveSystemCatalogEntryRequest"
+      responses:
+        "200":
+          description: Saved entry
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemCatalogEntry"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags: [System]
+      summary: Delete a catalog entry no Client has
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Not in the catalog (`UM-404-001`)
+        "409":
+          description: Clients still have this System (`UM-409-002`)
+
