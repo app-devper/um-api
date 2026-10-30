@@ -117,7 +117,7 @@ func respondPasskeyError(ctx *gin.Context, err error) {
 		logrus.Warn(err)
 		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrPasskeyRejected, passkey.ErrNotAccepted.Error()))
 	case errors.Is(err, passkey.ErrOtherAccount):
-		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrPasskeyRejected, passkey.ErrOtherAccount.Error()))
+		errs.Response(ctx, http.StatusUnauthorized, errs.New(errs.ErrPasskeyOtherAccount, passkey.ErrOtherAccount.Error()))
 	case errors.Is(err, passkey.ErrNotFound):
 		errs.Response(ctx, http.StatusNotFound, errs.New(errs.ErrNotFound, err.Error()))
 	default:
