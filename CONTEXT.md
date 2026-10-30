@@ -1,6 +1,6 @@
 # Identity and Access
 
-This context owns the people, sessions, roles, and system access used by the pharmacy app and other client applications.
+This context owns the people, sessions, roles, and system access used by every System in the Devper workspace (the pharmacy app, POS, PortForMe, Alert, …). It is the source of these identity terms; the workspace map in app-devper/agent-skills (`workspace/CONTEXT-MAP.md`) points here rather than redefining them.
 
 ## Language
 
