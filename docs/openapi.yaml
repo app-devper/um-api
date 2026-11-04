@@ -900,7 +900,7 @@ paths:
       description: |
         Issues a one-time, short-lived ticket (TTL 60 seconds, stored in Redis) that can be exchanged by another front-end for a fresh access token belonging to the same user.
 
-        Typical use: `dpharm.web.app` calls this, then redirects the browser to `https://devper-um.web.app/sso?ticket={ticket}&return=/profile` so the user lands on their UM profile page without re-logging in.
+        Typical use: `dpharm.web.app` calls this, then redirects the browser to `https://devper-um.web.app/sso?ticket={ticket}` so the user lands on their UM profile page without re-logging in.
 
         The ticket carries `{userId, role, clientId, system}` from the caller's current session. Exchange creates a brand-new session (different `sessionId`), so logging out on one front-end does not affect the other.
 

@@ -242,7 +242,7 @@ curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
 
 # 2. Redirect the browser to um-web's /sso handler, which will exchange the
 #    ticket for a fresh access token and drop the user on /profile
-window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}&return=/profile`;
+window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}`;
 ```
 
 To **launch another System from UM** (ADR-0011), list what the caller may open with `GET /auth/systems`, request `POST /auth/sso-ticket {"system":"PORT"}`, and send the browser to `<webUrl>/sso?ticket=<ticket>`; `webUrl` comes from the System catalog (ADR-0012), set once per System code at `PUT /system-catalog/:code`; the target app exchanges it for its own Session.
