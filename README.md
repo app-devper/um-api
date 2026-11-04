@@ -241,7 +241,7 @@ curl -X POST http://localhost:8585/api/um/v1/auth/sso-ticket \
 # → { "ticket": "<uuid>", "expiresIn": 60 }
 
 # 2. Redirect the browser to um-web's /sso handler, which will exchange the
-#    ticket for a fresh access token and drop the user on /profile
+#    ticket for a fresh access token and drop the user on their UM profile page
 window.location.href = `https://devper-um.web.app/sso?ticket=${ticket}`;
 ```
 
