@@ -7,6 +7,8 @@ import (
 	"um/app/core/utils"
 	"um/app/domain/model"
 	"um/app/domain/repository"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 // Why a Session could not be started.
@@ -70,6 +72,38 @@ func (m *Manager) Start(c Credentials, meta Metadata) (string, error) {
 	}
 	_ = m.guard.Reset(username)
 	return m.Issue(user, c.System, meta)
+}
+
+// ConfirmPassword checks the password of a User who already has a Session
+// (POST /auth/verify-password). It goes through the login lockout: a locked
+// User is refused, a wrong password counts toward the same counter as a
+// failed login, and a right one resets it. An unknown User is a wrong
+// credential and counts nothing, as there is no username to count against.
+func (m *Manager) ConfirmPassword(userId, password string) error {
+	if m.guard == nil {
+		return errors.New("session manager has no login (WithLogin)")
+	}
+	user, err := m.users.GetUserById(userId)
+	if errors.Is(err, mongo.ErrNoDocuments) || (err == nil && user == nil) {
+		return ErrWrongCredentials
+	}
+	if err != nil {
+		return fmt.Errorf("%w: user: %v", ErrUnavailable, err)
+	}
+	username := utils.NormalizeUsername(user.Username)
+	locked, err := m.guard.IsLocked(username)
+	if err != nil {
+		return fmt.Errorf("%w: lockout: %v", ErrUnavailable, err)
+	}
+	if locked {
+		return ErrLocked
+	}
+	if utils.ComparePasswordAndHashedPassword(password, user.Password) != nil {
+		_ = m.guard.RecordFailure(username)
+		return ErrWrongCredentials
+	}
+	_ = m.guard.Reset(username)
+	return nil
 }
 
 func (m *Manager) authenticate(username string, c Credentials) (*model.User, error) {
