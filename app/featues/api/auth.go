@@ -44,10 +44,10 @@ func ApplyAuthAPI(
 	route.GET("/keep-alive", usecase.KeepAlive(sessions))
 	route.GET("/verify", usecase.VerifySession())
 	route.GET("/system", usecase.GetSystem(systemEntity))
-	// The limiter bounds password guesses from a signed-in Session whatever the
+	// The limiter bounds password guesses per signed-in User whatever the
 	// lockout setting is, and before the lockout's check-then-count can race.
 	route.POST("/verify-password",
-		middlewares.RateLimiter(rdb, 5, 1*time.Minute),
+		middlewares.RateLimiterPerUser(rdb, 5, 1*time.Minute),
 		usecase.VerifyPassword(sessions),
 	)
 	route.POST("/logout", usecase.Logout(sessions))
