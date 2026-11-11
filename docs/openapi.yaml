@@ -630,7 +630,7 @@ paths:
     post:
       tags: [Auth]
       summary: Verify password
-      description: Verify the current user's password before performing a sensitive action. A wrong password counts toward the login lockout; a locked user gets 429.
+      description: Verify the current user's password before performing a sensitive action. Limited to 5 requests a minute per address (429). Where the login lockout is enabled (LOGIN_LOCKOUT_ENABLED), a wrong password also counts toward it and a locked user gets 429.
       security:
         - BearerAuth: []
       requestBody:
