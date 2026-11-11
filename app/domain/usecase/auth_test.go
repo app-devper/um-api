@@ -1005,8 +1005,10 @@ func TestVerifyPasswordRecordsAFailureUnderTheNormalizedUsername(t *testing.T) {
 	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), errs.ErrWrongPassword) {
 		t.Fatalf("expected 400 %s, got %d %s", errs.ErrWrongPassword, w.Code, w.Body.String())
 	}
-	if len(guard.recorded) != 1 || guard.recorded[0] != "alice" {
-		t.Fatalf("expected one failure under 'alice', got %#v", guard.recorded)
+	// The key is utils.NormalizeUsername of the stored username (trimmed, case
+	// kept), the same key a failed login records under.
+	if len(guard.recorded) != 1 || guard.recorded[0] != "Alice" {
+		t.Fatalf("expected one failure under 'Alice', got %#v", guard.recorded)
 	}
 }
 
