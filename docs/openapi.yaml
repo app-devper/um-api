@@ -630,7 +630,7 @@ paths:
     post:
       tags: [Auth]
       summary: Verify password
-      description: Verify the current user's password before performing a sensitive action.
+      description: Verify the current user's password before performing a sensitive action. A wrong password counts toward the login lockout; a locked user gets 429.
       security:
         - BearerAuth: []
       requestBody:
@@ -657,6 +657,17 @@ paths:
                 message: "wrong password"
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+        "503":
+          description: Lockout or user store unreachable; the confirmation is refused rather than skipping the lockout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppError"
+              example:
+                code: "UM-503-001"
+                message: "identity store unavailable, try again later"
 
   /auth/sessions:
     get:

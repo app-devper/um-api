@@ -12,3 +12,5 @@ Now `session.Manager` owns both:
 - `End`, `EndOther` and `EndAll` end Sessions. `EndAll` retries and reports any Session it could not end.
 
 `useradmin` ends Sessions through it. A change whose Sessions could not all be ended answers 503 `UM-503-002`: the change is saved and repeating it is safe. A deletion ends the Sessions first, so a failed attempt leaves the User in place to retry. The auth and session handlers only translate HTTP.
+
+**Addendum, 2026-11-07.** `ConfirmPassword` (used by `POST /auth/verify-password`) goes through the same lockout: a wrong confirmation counts toward the login counter, a right one resets it, and a locked User gets 429 `UM-429-001`. An unreachable lockout or user store refuses the confirmation (503 `UM-503-001`), as login does. The route had compared the hash itself with no guard, so a signed-in Session could guess the password without limit; this applies the decision above to a route it had missed.

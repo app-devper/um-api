@@ -44,7 +44,7 @@ func ApplyAuthAPI(
 	route.GET("/keep-alive", usecase.KeepAlive(sessions))
 	route.GET("/verify", usecase.VerifySession())
 	route.GET("/system", usecase.GetSystem(systemEntity))
-	route.POST("/verify-password", usecase.VerifyPassword(userEntity))
+	route.POST("/verify-password", usecase.VerifyPassword(sessions))
 	route.POST("/logout", usecase.Logout(sessions))
 	route.GET("/sessions", usecase.ListSessions(sessions))
 	route.DELETE("/sessions", usecase.RevokeOtherSessions(sessions))
