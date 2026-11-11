@@ -301,3 +301,82 @@ func TestStartWithPasskeyIgnoresTheLockout(t *testing.T) {
 		t.Fatalf("password lockout was reset: %v", err)
 	}
 }
+
+func TestConfirmPasswordCountsTowardTheLockout(t *testing.T) {
+	l := newLogin(t)
+	u := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	for i := 0; i < repository.LoginMaxFails; i++ {
+		if err := l.m.ConfirmPassword(u.Id.Hex(), "wrong"); !errors.Is(err, ErrWrongCredentials) {
+			t.Fatalf("attempt %d: %v", i+1, err)
+		}
+	}
+	if err := l.m.ConfirmPassword(u.Id.Hex(), "right-password"); !errors.Is(err, ErrLocked) {
+		t.Fatalf("after %d failures: %v", repository.LoginMaxFails, err)
+	}
+	if _, err := l.start("alice", "right-password", "POS"); !errors.Is(err, ErrLocked) {
+		t.Fatalf("login is not locked although verify-password failed %d times: %v", repository.LoginMaxFails, err)
+	}
+}
+
+func TestConfirmPasswordResetsTheLockoutOnSuccess(t *testing.T) {
+	l := newLogin(t)
+	u := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	for i := 0; i < repository.LoginMaxFails-1; i++ {
+		_ = l.m.ConfirmPassword(u.Id.Hex(), "wrong")
+	}
+	if err := l.m.ConfirmPassword(u.Id.Hex(), "right-password"); err != nil {
+		t.Fatalf("under the limit: %v", err)
+	}
+	for i := 0; i < repository.LoginMaxFails-1; i++ {
+		_ = l.m.ConfirmPassword(u.Id.Hex(), "wrong")
+	}
+	if err := l.m.ConfirmPassword(u.Id.Hex(), "right-password"); err != nil {
+		t.Fatalf("the counter was not reset by the success: %v", err)
+	}
+}
+
+func TestConfirmPasswordFailsClosedWhenTheLockoutStoreIsDown(t *testing.T) {
+	l := newLogin(t)
+	u := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	WithLogin(&systems{byClient: map[string][]string{"123": {"POS"}}}, brokenGuard{})(l.m)
+	if err := l.m.ConfirmPassword(u.Id.Hex(), "right-password"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestConfirmPasswordRefusesAnUnknownUser(t *testing.T) {
+	l := newLogin(t)
+	if err := l.m.ConfirmPassword(primitive.NewObjectID().Hex(), "x"); !errors.Is(err, ErrWrongCredentials) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// downUsers is a user store that cannot be reached.
+type downUsers struct{ repository.IUser }
+
+func (downUsers) GetUserById(string) (*model.User, error) { return nil, errors.New("mongo down") }
+
+func TestConfirmPasswordTreatsAUserStoreFailureAsAnOutage(t *testing.T) {
+	l := newLogin(t)
+	u := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	client := redis.NewClient(&redis.Options{Addr: l.store.mr.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	guard := repository.NewLoginGuardEntity(&db.Resource{RdDB: client}, true)
+	m := NewManager("test-secret", l.store, downUsers{}, WithLogin(&systems{}, guard))
+	if err := m.ConfirmPassword(u.Id.Hex(), "right-password"); !errors.Is(err, ErrUnavailable) {
+		t.Fatalf("got %v, want ErrUnavailable", err)
+	}
+	if errors.Is(m.ConfirmPassword(u.Id.Hex(), "right-password"), ErrWrongCredentials) {
+		t.Fatal("an outage must not read as a wrong password")
+	}
+}
+
+func TestConfirmPasswordNeedsALogin(t *testing.T) {
+	l := newLogin(t)
+	u := l.user(t, "alice", constant.ADMIN, "123", constant.ACTIVE)
+	m := NewManager("test-secret", l.store, l.users)
+	err := m.ConfirmPassword(u.Id.Hex(), "right-password")
+	if err == nil || errors.Is(err, ErrWrongCredentials) || errors.Is(err, ErrLocked) || errors.Is(err, ErrUnavailable) {
+		t.Fatalf("a Manager without WithLogin must refuse with a plain error, got %v", err)
+	}
+}

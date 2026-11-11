@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 	"um/app/core/errs"
-	"um/app/core/utils"
 	"um/app/domain/repository"
 	"um/app/domain/session"
 	"um/app/featues/request"
@@ -236,7 +235,9 @@ func RevokeOtherSessions(sessions *session.Manager) gin.HandlerFunc {
 	}
 }
 
-func VerifyPassword(userEntity repository.IUser) gin.HandlerFunc {
+// VerifyPassword confirms the signed-in User's password through the session
+// module, so a wrong confirmation counts toward the login lockout (ADR-0009).
+func VerifyPassword(sessions *session.Manager) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		req := request.VerifyPassword{}
 		if err := ctx.ShouldBind(&req); err != nil {
@@ -244,22 +245,16 @@ func VerifyPassword(userEntity repository.IUser) gin.HandlerFunc {
 			return
 		}
 
-		userId := ctx.GetString(middlewares.UserId)
-		user, err := userEntity.GetUserById(userId)
-		if err != nil {
-			logrus.Error(err)
-			errs.Response(ctx, http.StatusInternalServerError, errs.New(errs.ErrInternal, "internal server error"))
-			return
-		}
-
-		if user == nil || utils.ComparePasswordAndHashedPassword(req.Password, user.Password) != nil {
+		err := sessions.ConfirmPassword(ctx.GetString(middlewares.UserId), req.Password)
+		if errors.Is(err, session.ErrWrongCredentials) {
 			errs.Response(ctx, http.StatusBadRequest, errs.New(errs.ErrWrongPassword, "wrong password"))
 			return
 		}
-		result := gin.H{
-			"message": "success",
+		if err != nil {
+			respondSessionError(ctx, err)
+			return
 		}
-		ctx.JSON(http.StatusOK, result)
+		ctx.JSON(http.StatusOK, gin.H{"message": "success"})
 	}
 }
 

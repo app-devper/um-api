@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 	"um/app/core/config"
@@ -230,11 +231,12 @@ func (r *authTestSystemRepo) UpdateSystemById(id string, form request.UpdateSyst
 }
 
 type authTestLoginGuard struct {
+	locked   bool
 	recorded []string
 	reset    []string
 }
 
-func (g *authTestLoginGuard) IsLocked(username string) (bool, error) { return false, nil }
+func (g *authTestLoginGuard) IsLocked(username string) (bool, error) { return g.locked, nil }
 func (g *authTestLoginGuard) RecordFailure(username string) error {
 	g.recorded = append(g.recorded, username)
 	return nil
@@ -929,74 +931,54 @@ func TestLogoutRemovesSession(t *testing.T) {
 	}
 }
 
-func TestVerifyPasswordRejectsWrongPassword(t *testing.T) {
+// verifyPassword posts a password to POST /auth/verify-password as the
+// signed-in user "alice" (stored under the given username) and returns the
+// response with the lockout guard the handler used.
+func verifyPassword(t *testing.T, storedUsername, password string, guard *authTestLoginGuard) *httptest.ResponseRecorder {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
-
 	hashed, err := utils.HashPassword("password123")
 	if err != nil {
 		t.Fatalf("hash password: %v", err)
 	}
-
 	userID := primitive.NewObjectID()
 	userRepo := &authTestUserRepo{
 		user: &model.User{
 			Id:       userID,
-			Username: "alice",
+			Username: storedUsername,
 			Password: hashed,
 			ClientId: "123",
 			Role:     constant.ADMIN,
 			Status:   constant.ACTIVE,
 		},
 	}
-
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 	body, _ := json.Marshal(gin.H{
-		"password":  "wrong-password",
+		"password":  password,
 		"objective": "sensitive-action",
 	})
 	c.Request = httptest.NewRequest(http.MethodPost, "/auth/verify-password", bytes.NewReader(body))
 	c.Request.Header.Set("Content-Type", "application/json")
 	c.Set(middlewares.UserId, userID.Hex())
 
-	VerifyPassword(userRepo)(c)
+	VerifyPassword(session.NewManager("test-secret", &authTestSessionRepo{}, userRepo, session.WithLogin(&authTestSystemRepo{}, guard)))(c)
 
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	return w
+}
+
+func TestVerifyPasswordRejectsWrongPassword(t *testing.T) {
+	w := verifyPassword(t, "alice", "wrong-password", &authTestLoginGuard{})
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), errs.ErrWrongPassword) {
+		t.Fatalf("expected 400 %s, got %d body=%s", errs.ErrWrongPassword, w.Code, w.Body.String())
 	}
 }
 
 func TestVerifyPasswordReturnsSuccessForCorrectPassword(t *testing.T) {
-	gin.SetMode(gin.TestMode)
+	guard := &authTestLoginGuard{}
 
-	hashed, err := utils.HashPassword("password123")
-	if err != nil {
-		t.Fatalf("hash password: %v", err)
-	}
-
-	userID := primitive.NewObjectID()
-	userRepo := &authTestUserRepo{
-		user: &model.User{
-			Id:       userID,
-			Username: "alice",
-			Password: hashed,
-			ClientId: "123",
-			Role:     constant.ADMIN,
-			Status:   constant.ACTIVE,
-		},
-	}
-
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	body, _ := json.Marshal(gin.H{
-		"password":  "password123",
-		"objective": "sensitive-action",
-	})
-	c.Request = httptest.NewRequest(http.MethodPost, "/auth/verify-password", bytes.NewReader(body))
-	c.Request.Header.Set("Content-Type", "application/json")
-	c.Set(middlewares.UserId, userID.Hex())
-
-	VerifyPassword(userRepo)(c)
+	w := verifyPassword(t, "alice", "password123", guard)
 
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d body=%s", w.Code, w.Body.String())
@@ -1009,6 +991,37 @@ func TestVerifyPasswordReturnsSuccessForCorrectPassword(t *testing.T) {
 	}
 	if resp.Message != "success" {
 		t.Fatalf("expected success message, got %q", resp.Message)
+	}
+	if len(guard.reset) != 1 || len(guard.recorded) != 0 {
+		t.Fatalf("a right password resets the lockout once and records nothing, got reset %#v recorded %#v", guard.reset, guard.recorded)
+	}
+}
+
+func TestVerifyPasswordRecordsAFailureUnderTheNormalizedUsername(t *testing.T) {
+	guard := &authTestLoginGuard{}
+
+	w := verifyPassword(t, "Alice ", "wrong-password", guard)
+
+	if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), errs.ErrWrongPassword) {
+		t.Fatalf("expected 400 %s, got %d %s", errs.ErrWrongPassword, w.Code, w.Body.String())
+	}
+	// The key is utils.NormalizeUsername of the stored username (trimmed, case
+	// kept), the same key a failed login records under.
+	if len(guard.recorded) != 1 || guard.recorded[0] != "Alice" {
+		t.Fatalf("expected one failure under 'Alice', got %#v", guard.recorded)
+	}
+}
+
+func TestVerifyPasswordRefusesALockedUserWith429(t *testing.T) {
+	guard := &authTestLoginGuard{locked: true}
+
+	w := verifyPassword(t, "alice", "password123", guard)
+
+	if w.Code != http.StatusTooManyRequests || !strings.Contains(w.Body.String(), errs.ErrRateLimited) {
+		t.Fatalf("expected 429 %s, got %d %s", errs.ErrRateLimited, w.Code, w.Body.String())
+	}
+	if len(guard.recorded) != 0 {
+		t.Fatalf("a locked user's attempt must not be counted again, got %#v", guard.recorded)
 	}
 }
 
